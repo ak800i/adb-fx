@@ -47,9 +47,9 @@ function App() {
   // Load files when device changes
   useEffect(() => {
     if (selectedDevice?.state === 'device') {
-      navigateTo('/sdcard');
+      navigateTo(currentPath || '/sdcard');
     }
-  }, [selectedDevice, navigateTo]);
+  }, [selectedDevice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toast helpers
   const addToast = useCallback((type: ToastMessage['type'], message: string) => {
