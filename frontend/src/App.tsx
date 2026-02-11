@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useDevices } from './hooks/useDevices';
 import { useFileBrowser } from './hooks/useFileBrowser';
 import { DeviceSelector } from './components/DeviceSelector';
@@ -9,9 +9,21 @@ import { InputModal, ConfirmModal } from './components/Modal';
 import { LocalFilePicker, PickerMode } from './components/LocalFilePicker';
 import { Toast, ToastMessage } from './components/Toast';
 import { TransferQueue, TransferItem } from './components/TransferQueue';
-import { fileApi } from './services/api';
-import type { FileEntry } from './types';
+import { fileApi, deviceApi } from './services/api';
+import type { FileEntry, DeviceStorageInfo } from './types';
 import styles from './App.module.css';
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let i = 0;
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024;
+    i++;
+  }
+  return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+}
 
 function App() {
   const {
@@ -40,6 +52,7 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
+  const [storageInfo, setStorageInfo] = useState<DeviceStorageInfo[]>([]);
 
   // Local file picker state
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -51,6 +64,12 @@ function App() {
   useEffect(() => {
     if (selectedDevice?.state === 'device') {
       navigateTo(currentPath || '/storage');
+      // Fetch storage info
+      deviceApi.getStorageInfo(selectedDevice.id)
+        .then(setStorageInfo)
+        .catch(() => setStorageInfo([]));
+    } else {
+      setStorageInfo([]);
     }
   }, [selectedDevice]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -334,6 +353,35 @@ function App() {
                 onToggleSelect={toggleSelection}
                 loading={filesLoading}
               />
+              {/* Storage info bar */}
+              {storageInfo.length > 0 && (
+                <div className={styles.storageBar}>
+                  {storageInfo.map((s, i) => {
+                    const usedPct = s.total > 0 ? (s.used / s.total) * 100 : 0;
+                    const color = usedPct > 90 ? 'var(--danger)' : usedPct > 75 ? '#f39c12' : 'var(--accent)';
+                    const label = s.mount_point.includes('sdcard') || s.mount_point.includes('emulated')
+                      ? 'Internal' : s.mount_point.split('/').pop() || s.mount_point;
+                    return (
+                      <React.Fragment key={s.mount_point}>
+                        {i > 0 && <span className={styles.storageSep} />}
+                        <div className={styles.storageItem}>
+                          <span className={styles.storageLabel}>{label}</span>
+                          <div className={styles.storageMeter}>
+                            <div className={styles.storageFill} style={{ width: `${usedPct}%`, background: color }} />
+                          </div>
+                          <span>{formatBytes(s.available)} free / {formatBytes(s.total)}</span>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Transfer queue (inline panel below file list) */}
+              <TransferQueue
+                transfers={transfers}
+                onDismiss={dismissTransfer}
+                onClearCompleted={clearCompletedTransfers}
+              />
             </>
           ) : (
             <div className={styles.noDevice}>
@@ -344,13 +392,6 @@ function App() {
           )}
         </main>
       </div>
-
-      {/* Transfer queue (fixed bottom bar) */}
-      <TransferQueue
-        transfers={transfers}
-        onDismiss={dismissTransfer}
-        onClearCompleted={clearCompletedTransfers}
-      />
 
       {/* Local file picker for upload/download */}
       <LocalFilePicker

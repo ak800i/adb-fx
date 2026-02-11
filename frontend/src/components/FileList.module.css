@@ -5,6 +5,7 @@
   overflow: hidden;
   background: var(--bg-secondary);
   border-radius: 8px;
+  min-height: 0;
 }
 
 .header {
