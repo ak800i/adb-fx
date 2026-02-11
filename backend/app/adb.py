@@ -89,24 +89,19 @@ class ADBWrapper:
         cmd.extend(args)
         
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), 
-                timeout=timeout
+            result = await asyncio.to_thread(
+                subprocess.run,
+                cmd,
+                capture_output=True,
+                timeout=timeout,
             )
             
             return (
-                stdout.decode("utf-8", errors="replace"),
-                stderr.decode("utf-8", errors="replace"),
-                process.returncode or 0
+                result.stdout.decode("utf-8", errors="replace"),
+                result.stderr.decode("utf-8", errors="replace"),
+                result.returncode,
             )
-        except asyncio.TimeoutError:
-            process.kill()
+        except subprocess.TimeoutExpired:
             raise ADBError(f"Command timed out after {timeout}s", " ".join(cmd))
         except FileNotFoundError:
             raise ADBError(
