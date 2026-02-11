@@ -61,7 +61,7 @@ export const fileApi = {
   /**
    * List files in a directory
    */
-  async listFiles(deviceId: string, path: string = '/sdcard'): Promise<FileListResponse> {
+  async listFiles(deviceId: string, path: string = '/storage'): Promise<FileListResponse> {
     const params = new URLSearchParams({ path });
     const response = await fetch(
       `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files?${params}`

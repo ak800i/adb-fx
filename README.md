@@ -36,7 +36,7 @@ The only prerequisites are:
 - **Serial transfer queue**: Transfers are processed one at a time. If additional files or folders are added while a transfer is in progress, they are queued (shown as "Queued" in the transfer panel) and executed sequentially — never in parallel. This prevents ADB contention and ensures predictable behaviour.
 - **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes. Progress endpoint also returns transfer speed (bytes/sec), not just percentage
 - **Transfer speed**: Displayed in the transfer queue as an exponentially-weighted moving average (smoothed), updated on each progress poll. Speed is computed on the backend from byte-count deltas between poll intervals.
-- **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
+- **URL hash persistence**: Current path stored in `#/storage/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
 - The file picker remembers last browsed path across sessions (survives page close)
 
 ## Design

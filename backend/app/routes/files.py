@@ -19,7 +19,7 @@ router = APIRouter(prefix="/devices/{device_id}/files", tags=["files"])
 @router.get("", response_model=FileListResponse)
 async def list_files(
     device_id: str,
-    path: str = Query("/sdcard", description="Directory path to list")
+    path: str = Query("/storage", description="Directory path to list")
 ):
     """List files and directories at the given path."""
     try:

@@ -73,7 +73,7 @@ export function Toolbar({
         >
           <ChevronUp size={18} />
         </button>
-        <button onClick={onGoHome} title="Go to /sdcard">
+        <button onClick={onGoHome} title="Go to /storage">
           <Home size={18} />
         </button>
         <button onClick={onRefresh} title="Refresh">

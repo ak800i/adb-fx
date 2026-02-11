@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { FileEntry, FileListResponse } from '../types';
 import { fileApi } from '../services/api';
 
-const DEFAULT_PATH = '/sdcard';
+const DEFAULT_PATH = '/storage';
 
 function getPathFromHash(): string {
   const hash = window.location.hash.slice(1); // remove '#'
