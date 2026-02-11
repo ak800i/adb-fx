@@ -135,7 +135,6 @@ class ADBWrapper:
         *args: str,
         device_id: Optional[str] = None,
         transfer_id: Optional[str] = None,
-        timeout: int = 300,
     ) -> Tuple[str, str, int]:
         """
         Run an ADB command that can be cancelled via transfer_id.
@@ -160,11 +159,7 @@ class ADBWrapper:
                 with self._transfers_lock:
                     self._active_transfers[transfer_id] = proc
             try:
-                stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.communicate()
-                raise
+                stdout_bytes, stderr_bytes = proc.communicate()
             finally:
                 if transfer_id:
                     with self._transfers_lock:
@@ -604,7 +599,6 @@ class ADBWrapper:
                 "pull", remote_path, local_path,
                 device_id=device_id,
                 transfer_id=transfer_id,
-                timeout=300,
             )
         finally:
             if transfer_id:
@@ -663,7 +657,6 @@ class ADBWrapper:
                 "push", local_path, remote_path,
                 device_id=device_id,
                 transfer_id=transfer_id,
-                timeout=300,
             )
         finally:
             if transfer_id:
