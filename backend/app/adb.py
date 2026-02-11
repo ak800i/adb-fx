@@ -40,6 +40,12 @@ class ADBWrapper:
     
     def _find_adb(self) -> str:
         """Find ADB executable in system PATH."""
+        # Check for bundled ADB in repo's platform-tools directory first
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        bundled_adb = repo_root / "platform-tools" / "adb.exe"
+        if bundled_adb.exists():
+            return str(bundled_adb)
+        
         adb_exe = shutil.which("adb")
         if adb_exe:
             return adb_exe
