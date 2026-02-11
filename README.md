@@ -2,7 +2,7 @@
 
 A local-first desktop web app for managing files on Android devices via ADB.
 
-<img width="1468" height="1042" alt="image" src="https://github.com/user-attachments/assets/ec5b9139-7c64-47f6-87a8-d905fccffad7" />
+<img width="1422" height="992" alt="image" src="https://github.com/user-attachments/assets/9d75b27e-93b2-4515-9e4f-d6e12d6e3ea4" />
 
 ## Architecture
 
