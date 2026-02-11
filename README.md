@@ -31,7 +31,8 @@ The only prerequisites are:
 - **Upload**: Local file picker browses the Windows filesystem (drives, folders, files) → backend pushes directly to device
 - **Download**: Select device files → local folder picker → backend pulls directly to that folder
 - **New folder**, **Delete** (with confirmation), **Rename**
-- **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button on the toast notification
+- **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button in the transfer queue
+- **Transfer queue panel**: A persistent, collapsible panel pinned to the bottom of the content area (like a browser download manager). Active transfers show real-time progress bars and cancel buttons; completed/failed/cancelled transfers remain visible until explicitly dismissed or cleared. Unlike ephemeral toast notifications, the transfer queue cannot be accidentally dismissed or auto-hidden during a long transfer.
 - **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes.
 - **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
 
@@ -40,7 +41,8 @@ The only prerequisites are:
 - Dark theme (deep navy/indigo palette: `#1a1a2e`, `#16213e`, `#0f3460`)
 - Android green accent (`#3DDC84`)
 - Sidebar (300px) + main content layout
-- Toasts for operation feedback (success/error with auto-dismiss)
+- Toasts for simple operation feedback (success/error with auto-dismiss)
+- Transfer queue panel (bottom of content area) for persistent progress tracking
 - Custom local file picker modal with drive buttons, breadcrumb navigation, file selection
 - Responsive breakpoints at 900px, 800px, 600px
 
@@ -81,7 +83,7 @@ adb-fx/
 │   ├── src/
 │   │   ├── App.tsx        # Main application component
 │   │   ├── types.ts       # TypeScript type definitions
-│   │   ├── components/    # UI components (Toolbar, FileList, LocalFilePicker, etc.)
+│   │   ├── components/    # UI components (Toolbar, FileList, TransferQueue, LocalFilePicker, etc.)
 │   │   ├── hooks/         # React hooks (useDevices, useFileBrowser)
 │   │   └── services/
 │   │       └── api.ts     # Backend API client
