@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState, useRef } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useDevices } from './hooks/useDevices';
 import { useFileBrowser } from './hooks/useFileBrowser';
 import { DeviceSelector } from './components/DeviceSelector';
@@ -313,6 +313,28 @@ function App() {
       <div className={styles.main}>
         {/* Sidebar */}
         <aside className={styles.sidebar}>
+          {/* Storage info */}
+          {storageInfo.length > 0 && (
+            <div className={styles.storageBar}>
+              {storageInfo.map((s) => {
+                const usedPct = s.total > 0 ? (s.used / s.total) * 100 : 0;
+                const color = usedPct > 90 ? 'var(--danger)' : usedPct > 75 ? '#f39c12' : 'var(--accent)';
+                const label = s.mount_point.includes('sdcard') || s.mount_point.includes('emulated')
+                  ? 'Internal' : s.mount_point.split('/').pop() || s.mount_point;
+                return (
+                  <div key={s.mount_point} className={styles.storageItem}>
+                    <div className={styles.storageRow}>
+                      <span className={styles.storageLabel}>{label}</span>
+                      <span className={styles.storageText}>{formatBytes(s.available)} free / {formatBytes(s.total)}</span>
+                    </div>
+                    <div className={styles.storageMeter}>
+                      <div className={styles.storageFill} style={{ width: `${usedPct}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <DeviceSelector
             devices={devices}
             selectedDevice={selectedDevice}
@@ -353,29 +375,6 @@ function App() {
                 onToggleSelect={toggleSelection}
                 loading={filesLoading}
               />
-              {/* Storage info bar */}
-              {storageInfo.length > 0 && (
-                <div className={styles.storageBar}>
-                  {storageInfo.map((s, i) => {
-                    const usedPct = s.total > 0 ? (s.used / s.total) * 100 : 0;
-                    const color = usedPct > 90 ? 'var(--danger)' : usedPct > 75 ? '#f39c12' : 'var(--accent)';
-                    const label = s.mount_point.includes('sdcard') || s.mount_point.includes('emulated')
-                      ? 'Internal' : s.mount_point.split('/').pop() || s.mount_point;
-                    return (
-                      <React.Fragment key={s.mount_point}>
-                        {i > 0 && <span className={styles.storageSep} />}
-                        <div className={styles.storageItem}>
-                          <span className={styles.storageLabel}>{label}</span>
-                          <div className={styles.storageMeter}>
-                            <div className={styles.storageFill} style={{ width: `${usedPct}%`, background: color }} />
-                          </div>
-                          <span>{formatBytes(s.available)} free / {formatBytes(s.total)}</span>
-                        </div>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              )}
               {/* Transfer queue (inline panel below file list) */}
               <TransferQueue
                 transfers={transfers}
