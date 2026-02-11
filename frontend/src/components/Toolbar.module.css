@@ -65,3 +65,44 @@
     margin-left: auto;
   }
 }
+
+.uploadGroup {
+  position: relative;
+}
+
+.uploadMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  min-width: 140px;
+  overflow: hidden;
+}
+
+.uploadMenu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.uploadMenu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.uploadMenu button + button {
+  border-top: 1px solid var(--border);
+}

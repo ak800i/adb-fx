@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ChevronUp, 
+  ChevronDown,
   RefreshCw, 
   Home,
   FolderPlus,
   Upload,
   Download,
-  Trash2
+  Trash2,
+  File,
+  Folder
 } from 'lucide-react';
 import styles from './Toolbar.module.css';
 
@@ -20,6 +23,7 @@ interface ToolbarProps {
   onRefresh: () => void;
   onNewFolder: () => void;
   onUpload: () => void;
+  onUploadFolder: () => void;
   onDownload: () => void;
   onDelete: () => void;
   onPathChange: (path: string) => void;
@@ -35,6 +39,7 @@ export function Toolbar({
   onRefresh,
   onNewFolder,
   onUpload,
+  onUploadFolder,
   onDownload,
   onDelete,
   onPathChange,
@@ -44,6 +49,19 @@ export function Toolbar({
       onPathChange(e.currentTarget.value);
     }
   };
+
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const uploadMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target as Node)) {
+        setShowUploadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className={styles.toolbar}>
@@ -82,10 +100,25 @@ export function Toolbar({
           <FolderPlus size={18} />
           <span className={styles.btnText}>New Folder</span>
         </button>
-        <button onClick={onUpload} title="Upload files">
-          <Upload size={18} />
-          <span className={styles.btnText}>Upload</span>
-        </button>
+        <div className={styles.uploadGroup} ref={uploadMenuRef}>
+          <button onClick={() => setShowUploadMenu((v) => !v)} title="Upload">
+            <Upload size={18} />
+            <span className={styles.btnText}>Upload</span>
+            <ChevronDown size={14} />
+          </button>
+          {showUploadMenu && (
+            <div className={styles.uploadMenu}>
+              <button onClick={() => { onUpload(); setShowUploadMenu(false); }}>
+                <File size={16} />
+                Files
+              </button>
+              <button onClick={() => { onUploadFolder(); setShowUploadMenu(false); }}>
+                <Folder size={16} />
+                Folder
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={onDownload}
           disabled={!hasSelection}

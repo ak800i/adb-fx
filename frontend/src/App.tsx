@@ -37,8 +37,9 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   
-  // File upload input ref
+  // File upload input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Load files when device changes
   useEffect(() => {
@@ -88,6 +89,10 @@ function App() {
 
   const handleUpload = useCallback(() => {
     fileInputRef.current?.click();
+  }, []);
+
+  const handleUploadFolder = useCallback(() => {
+    folderInputRef.current?.click();
   }, []);
 
   const updateToastProgress = useCallback((id: string, progress: number, message?: string) => {
@@ -247,6 +252,7 @@ function App() {
                 onRefresh={refresh}
                 onNewFolder={() => setShowNewFolder(true)}
                 onUpload={handleUpload}
+                onUploadFolder={handleUploadFolder}
                 onDownload={handleDownload}
                 onDelete={() => setShowDeleteConfirm(true)}
                 onPathChange={navigateTo}
@@ -270,12 +276,21 @@ function App() {
         </main>
       </div>
 
-      {/* Hidden file input */}
+      {/* Hidden file inputs */}
       <input
         type="file"
         ref={fileInputRef}
         style={{ display: 'none' }}
         multiple
+        onChange={handleFileInputChange}
+      />
+      {/* Folder upload input */}
+      <input
+        type="file"
+        ref={folderInputRef}
+        style={{ display: 'none' }}
+        // @ts-expect-error webkitdirectory is non-standard but widely supported
+        webkitdirectory=""
         onChange={handleFileInputChange}
       />
 
