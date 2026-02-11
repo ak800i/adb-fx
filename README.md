@@ -119,4 +119,4 @@ adb-fx/
 
 ## License
 
-MIT
+GPL v3
