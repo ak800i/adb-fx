@@ -20,11 +20,8 @@ if not exist "venv" (
     python -m venv venv
 )
 
-echo Activating virtual environment...
-call venv\Scripts\activate.bat
-
 echo Installing dependencies...
-pip install -r requirements.txt
+venv\Scripts\pip.exe install -r requirements.txt
 
 echo.
 echo ========================================
@@ -34,4 +31,4 @@ echo.
 echo API Documentation: http://localhost:8000/api/docs
 echo.
 
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000

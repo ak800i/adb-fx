@@ -3,6 +3,13 @@ ADB File Explorer - FastAPI Backend
 
 A REST API for managing files on Android devices via ADB.
 """
+import sys
+import asyncio
+
+# Windows requires ProactorEventLoop for subprocess support
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import devices, files
