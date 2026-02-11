@@ -568,27 +568,36 @@ class ADBWrapper:
         # Start file-size progress monitor for pulls
         if transfer_id:
             self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
-            # Try single-file size first; if it's a directory, use du -sb
-            remote_size = self._get_remote_file_size_sync(device_id, remote_path)
+            # Determine remote size and whether it's a directory.
+            # stat -c %s returns inode size for dirs (e.g. 4096), file size for files.
+            # du -sb returns recursive total for dirs, same as stat for files.
+            # Compare them to detect directories reliably.
+            stat_size = self._get_remote_file_size_sync(device_id, remote_path)
+            du_size = self._get_remote_dir_size_sync(device_id, remote_path)
             is_remote_dir = False
-            if remote_size is not None and remote_size < 4096:
-                # Small stat result could be a directory metadata entry — verify with du
-                dir_size = self._get_remote_dir_size_sync(device_id, remote_path)
-                if dir_size is not None and dir_size > remote_size:
-                    remote_size = dir_size
-                    is_remote_dir = True
-            logger.debug("PULL [%s]: remote_size=%s, is_dir=%s, dest=%s", transfer_id, remote_size, is_remote_dir, local_path)
+            if du_size is not None and stat_size is not None and du_size > stat_size:
+                remote_size = du_size
+                is_remote_dir = True
+            elif du_size is not None and stat_size is None:
+                remote_size = du_size
+                is_remote_dir = True
+            else:
+                remote_size = stat_size or du_size
+            logger.debug("PULL [%s]: stat=%s, du=%s, is_dir=%s, dest=%s", transfer_id, stat_size, du_size, is_remote_dir, local_path)
             if remote_size and remote_size > 0:
                 if is_remote_dir:
-                    def check_local_size():
-                        return self._get_local_total_size(local_path)
+                    size_fn = lambda: self._get_local_total_size(local_path)
                 else:
-                    def check_local_size():
+                    # Use open+seek instead of os.path.getsize — on Windows,
+                    # os.stat may return cached/stale size while adb is writing.
+                    def size_fn():
                         try:
-                            return os.path.getsize(local_path)
+                            with open(local_path, 'rb') as f:
+                                f.seek(0, 2)
+                                return f.tell()
                         except OSError:
                             return 0
-                self._start_progress_monitor(transfer_id, remote_size, check_local_size)
+                self._start_progress_monitor(transfer_id, remote_size, size_fn)
 
         try:
             stdout, stderr, code = await self._run_cancellable(
