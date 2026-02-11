@@ -6,11 +6,17 @@ const DEFAULT_PATH = '/sdcard';
 
 function getPathFromHash(): string {
   const hash = window.location.hash.slice(1); // remove '#'
-  return hash || DEFAULT_PATH;
+  if (!hash) return DEFAULT_PATH;
+  try {
+    return decodeURIComponent(hash);
+  } catch {
+    return hash;
+  }
 }
 
 function setHashPath(path: string) {
-  const newHash = '#' + path;
+  // Encode each segment individually so '/' stays readable but spaces/special chars are encoded
+  const newHash = '#' + path.split('/').map(s => encodeURIComponent(s)).join('/');
   if (window.location.hash !== newHash) {
     window.history.pushState(null, '', newHash);
   }

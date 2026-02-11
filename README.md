@@ -32,7 +32,7 @@ The only prerequisites are:
 - **Download**: Select device files → local folder picker → backend pulls directly to that folder
 - **New folder**, **Delete** (with confirmation), **Rename**
 - **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button on the toast notification
-- **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward
+- **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
 
 ## Design
 
