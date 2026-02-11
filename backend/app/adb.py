@@ -46,6 +46,16 @@ class ADBWrapper:
         self._transfer_progress: Dict[str, dict] = {}  # {progress, bytes_transferred, speed_bps, total_size}
         self._transfers_lock = threading.Lock()
     
+    @staticmethod
+    def _shell_escape(path: str) -> str:
+        """Escape a path for safe use inside a single-quoted shell argument.
+
+        This handles characters like ' ( ) by ending the current
+        single-quoted segment, inserting an escaped character, and
+        re-opening single quotes.  e.g.  it's -> 'it'\''s'
+        """
+        return path.replace("'", "'\\''")
+
     def _find_adb(self) -> str:
         """Find ADB executable in system PATH."""
         # Check for bundled ADB in repo's platform-tools directory first
@@ -189,9 +199,8 @@ class ADBWrapper:
 
     def _get_remote_file_size_sync(self, device_id: str, remote_path: str) -> Optional[int]:
         """Get file size on device via sync subprocess. Returns None on failure."""
-        # Quote the path for the device shell (escape single quotes, wrap in single quotes)
-        quoted = remote_path.replace("'", "'\\''")
-        shell_cmd = f"stat -c %s '{quoted}'"
+        escaped = self._shell_escape(remote_path)
+        shell_cmd = f"stat -c %s '{escaped}'"
         try:
             result = subprocess.run(
                 [self.adb_path, "-s", device_id, "shell", shell_cmd],
@@ -210,8 +219,8 @@ class ADBWrapper:
 
     def _get_remote_dir_size_sync(self, device_id: str, remote_path: str) -> Optional[int]:
         """Get total size of a directory tree on device via 'du -sb'. Returns None on failure."""
-        quoted = remote_path.replace("'", "'\\''")
-        shell_cmd = f"du -sb '{quoted}'"
+        escaped = self._shell_escape(remote_path)
+        shell_cmd = f"du -sb '{escaped}'"
         try:
             result = subprocess.run(
                 [self.adb_path, "-s", device_id, "shell", shell_cmd],
@@ -396,7 +405,7 @@ class ADBWrapper:
     async def list_files(
         self, 
         device_id: str, 
-        path: str = "/sdcard"
+        path: str = "/storage"
     ) -> FileListResponse:
         """
         List files and directories at the given path.
@@ -412,8 +421,9 @@ class ADBWrapper:
         path = path.rstrip("/") or "/"
         
         # Use ls -la for detailed listing
+        escaped = self._shell_escape(path)
         stdout, stderr, code = await self._run_command(
-            "shell", f"ls -la '{path}'",
+            "shell", f"ls -la '{escaped}'",
             device_id=device_id,
             timeout=10
         )
@@ -686,10 +696,11 @@ class ADBWrapper:
         Returns:
             True if successful
         """
+        escaped = self._shell_escape(path)
         if recursive:
-            cmd = f"rm -rf '{path}'"
+            cmd = f"rm -rf '{escaped}'"
         else:
-            cmd = f"rm -f '{path}'"
+            cmd = f"rm -f '{escaped}'"
         
         stdout, stderr, code = await self._run_command(
             "shell", cmd,
@@ -712,8 +723,9 @@ class ADBWrapper:
         Returns:
             True if successful
         """
+        escaped = self._shell_escape(path)
         stdout, stderr, code = await self._run_command(
-            "shell", f"mkdir -p '{path}'",
+            "shell", f"mkdir -p '{escaped}'",
             device_id=device_id
         )
         
@@ -739,8 +751,10 @@ class ADBWrapper:
         Returns:
             True if successful
         """
+        escaped_old = self._shell_escape(old_path)
+        escaped_new = self._shell_escape(new_path)
         stdout, stderr, code = await self._run_command(
-            "shell", f"mv '{old_path}' '{new_path}'",
+            "shell", f"mv '{escaped_old}' '{escaped_new}'",
             device_id=device_id
         )
         
@@ -814,16 +828,18 @@ class ADBWrapper:
     
     async def file_exists(self, device_id: str, path: str) -> bool:
         """Check if a file or directory exists on the device."""
+        escaped = self._shell_escape(path)
         stdout, stderr, code = await self._run_command(
-            "shell", f"test -e '{path}' && echo 'exists'",
+            "shell", f"test -e '{escaped}' && echo 'exists'",
             device_id=device_id
         )
         return "exists" in stdout
     
     async def is_directory(self, device_id: str, path: str) -> bool:
         """Check if path is a directory on the device."""
+        escaped = self._shell_escape(path)
         stdout, stderr, code = await self._run_command(
-            "shell", f"test -d '{path}' && echo 'yes'",
+            "shell", f"test -d '{escaped}' && echo 'yes'",
             device_id=device_id
         )
         return "yes" in stdout
