@@ -639,14 +639,15 @@ class ADBWrapper:
             logger.debug("PUSH [%s]: local_size=%s, is_dir=%s, dest=%s", transfer_id, local_size, is_dir, remote_path)
             if local_size > 0:
                 if is_dir:
-                    # For directories: monitor total remote dir size via du -sb
-                    def check_remote_size():
-                        return self._get_remote_dir_size_sync(device_id, remote_path)
+                    # adb push creates remote_path/basename(local_path)/
+                    # Monitor that specific subfolder, NOT the whole parent dir
+                    monitor_path = f"{remote_path.rstrip('/')}/{os.path.basename(local_path)}"
+                    logger.debug("PUSH [%s]: monitoring remote subfolder %s", transfer_id, monitor_path)
+                    size_fn = lambda _mp=monitor_path: self._get_remote_dir_size_sync(device_id, _mp)
                 else:
                     # For single files: monitor destination file size via stat
-                    def check_remote_size():
-                        return self._get_remote_file_size_sync(device_id, remote_path)
-                self._start_progress_monitor(transfer_id, local_size, check_remote_size, interval=1.0)
+                    size_fn = lambda: self._get_remote_file_size_sync(device_id, remote_path)
+                self._start_progress_monitor(transfer_id, local_size, size_fn, interval=1.0)
 
         try:
             stdout, stderr, code = await self._run_cancellable(
