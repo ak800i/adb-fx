@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { useDevices } from './hooks/useDevices';
 import { useFileBrowser } from './hooks/useFileBrowser';
 import { DeviceSelector } from './components/DeviceSelector';
+import { WirelessConnect } from './components/WirelessConnect';
 import { Toolbar } from './components/Toolbar';
 import { FileList } from './components/FileList';
 import { InputModal, ConfirmModal } from './components/Modal';
@@ -299,6 +300,10 @@ function App() {
             onSelect={setSelectedDevice}
             onRefresh={refreshDevices}
             loading={devicesLoading}
+          />
+          <WirelessConnect
+            usbDevices={devices.filter((d) => d.state === 'device' && !d.id.includes(':'))}
+            onConnected={refreshDevices}
           />
         </aside>
 

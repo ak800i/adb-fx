@@ -1,0 +1,213 @@
+.container {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.header:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chevron {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.body {
+  padding: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tabActive {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tabActive:hover {
+  background: var(--accent);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.inputGroup label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.inputGroup input {
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.inputGroup input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.portInput {
+  max-width: 80px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.connectBtn {
+  flex: 1;
+  padding: 7px 12px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.connectBtn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.connectBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.statusMsg {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.statusSuccess {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.statusError {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  padding: 6px 0 0;
+}
+
+.hint ol {
+  margin: 4px 0 0 16px;
+  padding: 0;
+}
+
+.hint li {
+  margin-bottom: 2px;
+}
+
+.usbDeviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.usbDeviceBtn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.usbDeviceBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.usbDeviceBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.usbDeviceName {
+  font-weight: 500;
+}
+
+.usbDeviceId {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.switchLabel {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}

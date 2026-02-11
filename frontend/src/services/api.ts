@@ -52,6 +52,54 @@ export const deviceApi = {
     const response = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/storage`);
     return handleResponse<DeviceStorageInfo[]>(response);
   },
+
+  /**
+   * Connect to a device wirelessly over TCP/IP
+   */
+  async wirelessConnect(address: string, port: number = 5555): Promise<OperationResult> {
+    const response = await fetch(`${API_BASE}/devices/wireless/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, port }),
+    });
+    return handleResponse<OperationResult>(response);
+  },
+
+  /**
+   * Disconnect a wireless device
+   */
+  async wirelessDisconnect(address: string, port: number = 5555): Promise<OperationResult> {
+    const response = await fetch(`${API_BASE}/devices/wireless/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, port }),
+    });
+    return handleResponse<OperationResult>(response);
+  },
+
+  /**
+   * Pair with a device using Android 11+ wireless debugging pairing code
+   */
+  async wirelessPair(address: string, port: number, code: string): Promise<OperationResult> {
+    const response = await fetch(`${API_BASE}/devices/wireless/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, port, code }),
+    });
+    return handleResponse<OperationResult>(response);
+  },
+
+  /**
+   * Switch a USB-connected device to TCP/IP mode
+   */
+  async wirelessTcpip(deviceId: string, port: number = 5555): Promise<OperationResult> {
+    const response = await fetch(`${API_BASE}/devices/wireless/tcpip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: deviceId, port }),
+    });
+    return handleResponse<OperationResult>(response);
+  },
 };
 
 /**

@@ -844,6 +844,80 @@ class ADBWrapper:
         )
         return "yes" in stdout
 
+    async def connect_wireless(self, address: str, port: int = 5555) -> str:
+        """
+        Connect to a device over Wi-Fi / TCP.
+
+        Args:
+            address: IP address (or host) of the device.
+            port: TCP port (default 5555).
+
+        Returns:
+            Status message from adb.
+        """
+        target = f"{address}:{port}"
+        stdout, stderr, code = await self._run_command("connect", target, timeout=15)
+        output = (stdout + stderr).strip()
+        # ADB returns 0 even on failure; inspect the text
+        if "connected" in output.lower():
+            return output
+        raise ADBError(output or "Failed to connect")
+
+    async def disconnect_wireless(self, address: str, port: int = 5555) -> str:
+        """
+        Disconnect a wireless device.
+
+        Args:
+            address: IP address (or host) of the device.
+            port: TCP port (default 5555).
+
+        Returns:
+            Status message from adb.
+        """
+        target = f"{address}:{port}"
+        stdout, stderr, code = await self._run_command("disconnect", target, timeout=10)
+        return (stdout + stderr).strip()
+
+    async def pair_wireless(self, address: str, port: int, code_str: str) -> str:
+        """
+        Pair with a device using the Android 11+ wireless debugging pairing code.
+
+        Args:
+            address: IP address of the device.
+            port: Pairing port shown on device.
+            code_str: Pairing code shown on device.
+
+        Returns:
+            Status message from adb.
+        """
+        target = f"{address}:{port}"
+        # adb pair <host:port> <code>
+        stdout, stderr, code = await self._run_command("pair", target, code_str, timeout=15)
+        output = (stdout + stderr).strip()
+        if "successfully" in output.lower() or "paired" in output.lower():
+            return output
+        raise ADBError(output or "Pairing failed")
+
+    async def tcpip_mode(self, device_id: str, port: int = 5555) -> str:
+        """
+        Switch a USB-connected device to TCP/IP mode so it can accept
+        wireless connections.
+
+        Args:
+            device_id: Serial of the USB-connected device.
+            port: TCP port to listen on (default 5555).
+
+        Returns:
+            Status message from adb.
+        """
+        stdout, stderr, code = await self._run_command(
+            "tcpip", str(port), device_id=device_id, timeout=10
+        )
+        output = (stdout + stderr).strip()
+        if code != 0 and output:
+            raise ADBError(output)
+        return output or f"Device listening on port {port}"
+
 
 # Global ADB instance
 adb = ADBWrapper()

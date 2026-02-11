@@ -90,3 +90,22 @@ class DeviceStorageInfo(BaseModel):
     used: int = Field(..., description="Used storage in bytes")
     available: int = Field(..., description="Available storage in bytes")
     mount_point: str = Field(..., description="Mount point path")
+
+
+class WirelessConnectRequest(BaseModel):
+    """Request to connect to a device wirelessly."""
+    address: str = Field(..., description="IP address of the device")
+    port: int = Field(5555, description="TCP port (default 5555)")
+
+
+class WirelessPairRequest(BaseModel):
+    """Request to pair with a device using Android 11+ wireless debugging."""
+    address: str = Field(..., description="IP address of the device")
+    port: int = Field(..., description="Pairing port shown on device")
+    code: str = Field(..., description="Pairing code shown on device")
+
+
+class TcpIpRequest(BaseModel):
+    """Request to switch a USB device to TCP/IP mode."""
+    device_id: str = Field(..., description="Serial of the USB-connected device")
+    port: int = Field(5555, description="TCP port to listen on")
