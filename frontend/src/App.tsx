@@ -132,11 +132,13 @@ function App() {
     const startProgressPoll = (deviceId: string, transferId: string, itemId: string) => {
       const interval = setInterval(async () => {
         try {
-          const pct = await fileApi.getProgress(deviceId, transferId);
-          if (pct !== null) {
+          const info = await fileApi.getProgress(deviceId, transferId);
+          if (info !== null) {
             setTransfers((prev) =>
               prev.map((t) =>
-                t.id === itemId && t.status === 'active' ? { ...t, progress: pct } : t
+                t.id === itemId && t.status === 'active'
+                  ? { ...t, progress: info.progress, speedBps: info.speedBps }
+                  : t
               )
             );
           }
@@ -161,6 +163,7 @@ function App() {
           direction: 'push',
           status: 'active',
           progress: 0,
+          speedBps: 0,
           onCancel: () => cancelTransfer(selectedDevice.id, transferId, itemId),
         };
         setTransfers((prev) => [...prev, item]);
@@ -169,7 +172,7 @@ function App() {
         try {
           await fileApi.pushLocal(selectedDevice.id, localPath, currentPath, transferId);
           stopPolling();
-          updateTransfer(itemId, { status: 'completed', progress: 100, onCancel: undefined });
+          updateTransfer(itemId, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
         } catch (err) {
           stopPolling();
           const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -197,6 +200,7 @@ function App() {
           direction: 'pull',
           status: 'active',
           progress: 0,
+          speedBps: 0,
           onCancel: () => cancelTransfer(selectedDevice.id, transferId, itemId),
         };
         setTransfers((prev) => [...prev, item]);
@@ -205,7 +209,7 @@ function App() {
         try {
           await fileApi.pullToLocal(selectedDevice.id, remotePath, localDir, transferId);
           stopPolling();
-          updateTransfer(itemId, { status: 'completed', progress: 100, onCancel: undefined });
+          updateTransfer(itemId, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
         } catch (err) {
           stopPolling();
           const msg = err instanceof Error ? err.message : 'Unknown error';

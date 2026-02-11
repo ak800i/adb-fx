@@ -22,6 +22,7 @@ export interface TransferItem {
   direction: TransferDirection;
   status: TransferStatus;
   progress: number; // 0-100
+  speedBps: number; // bytes per second
   error?: string;
   onCancel?: () => void;
 }
@@ -30,6 +31,13 @@ interface TransferQueueProps {
   transfers: TransferItem[];
   onDismiss: (id: string) => void;
   onClearCompleted: () => void;
+}
+
+function formatSpeed(bps: number): string {
+  if (bps <= 0) return '';
+  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
+  return `${bps} B/s`;
 }
 
 export function TransferQueue({ transfers, onDismiss, onClearCompleted }: TransferQueueProps) {
@@ -107,9 +115,14 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                 )}
               </div>
 
-              {/* Percentage for active */}
+              {/* Speed + percentage for active */}
               {t.status === 'active' && (
-                <span className={styles.pct}>{Math.round(t.progress)}%</span>
+                <span className={styles.stats}>
+                  {t.speedBps > 0 && (
+                    <span className={styles.speed}>{formatSpeed(t.speedBps)}</span>
+                  )}
+                  <span className={styles.pct}>{Math.round(t.progress)}%</span>
+                </span>
               )}
 
               {/* Cancel / dismiss */}

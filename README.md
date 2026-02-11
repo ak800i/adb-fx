@@ -32,8 +32,9 @@ The only prerequisites are:
 - **Download**: Select device files → local folder picker → backend pulls directly to that folder
 - **New folder**, **Delete** (with confirmation), **Rename**
 - **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button in the transfer queue
-- **Transfer queue panel**: A persistent, collapsible panel pinned to the bottom of the content area (like a browser download manager). Active transfers show real-time progress bars and cancel buttons; completed/failed/cancelled transfers remain visible until explicitly dismissed or cleared. Unlike ephemeral toast notifications, the transfer queue cannot be accidentally dismissed or auto-hidden during a long transfer.
+- **Transfer queue panel**: A persistent, collapsible panel pinned to the bottom of the content area (like a browser download manager). Active transfers show real-time progress bars, transfer speed (KB/s or MB/s), and cancel buttons; completed/failed/cancelled transfers remain visible until explicitly dismissed or cleared. Unlike ephemeral toast notifications, the transfer queue cannot be accidentally dismissed or auto-hidden during a long transfer.
 - **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes.
+- **Transfer speed**: Displayed in the transfer queue as an exponentially-weighted moving average (smoothed), updated on each progress poll. Speed is computed on the backend from byte-count deltas between poll intervals.
 - **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
 
 ## Design
@@ -61,6 +62,8 @@ ADB **suppresses progress output** when stdout/stderr are pipes (only writes pro
 - **Push** (local → device): A daemon thread polls `adb shell stat -c %s '<remote_path>'` every **1s** (longer interval due to ADB shell round-trip cost) against `os.path.getsize(local_path)`
 
 Progress is capped at 99% until the ADB process actually exits successfully.
+
+**Transfer speed** is calculated in the same monitor thread using an exponential moving average (EMA, α=0.3) of byte-count deltas between poll intervals. This smooths out jitter from filesystem caching and ADB shell round-trip variance. The speed (bytes/sec) is returned alongside progress in the `/progress` endpoint and displayed in the transfer queue UI as KB/s or MB/s.
 
 **Path quoting**: Remote paths passed to `adb shell stat` must be wrapped in single quotes with internal single quotes escaped (`'` → `'\''`), since `adb shell` concatenates all args into a single shell command string. Without this, paths containing spaces or parentheses (e.g. `F1 (2025)`) cause `stat` to fail silently.
 
@@ -106,7 +109,7 @@ adb-fx/
 | DELETE | `/api/devices/{id}/files` | Delete file or folder |
 | POST | `/api/devices/{id}/files/rename` | Rename/move file or folder |
 | POST | `/api/devices/{id}/files/cancel` | Cancel an in-progress transfer |
-| GET | `/api/devices/{id}/files/progress` | Get transfer progress (0-100%) |
+| GET | `/api/devices/{id}/files/progress` | Get transfer progress (0-100%), speed (bytes/s) |
 | GET | `/api/local/drives` | List Windows drive letters |
 | GET | `/api/local/list` | Browse local directory contents |
 

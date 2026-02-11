@@ -89,9 +89,17 @@ async def get_progress(
     device_id: str,
     transfer_id: str = Query(..., description="Transfer ID to check"),
 ):
-    """Get progress percentage for an in-progress transfer."""
-    progress = adb.get_progress(transfer_id)
-    return {"transfer_id": transfer_id, "progress": progress}
+    """Get progress info for an in-progress transfer."""
+    info = adb.get_progress(transfer_id)
+    if info is None:
+        return {"transfer_id": transfer_id, "progress": None, "speed_bps": None}
+    return {
+        "transfer_id": transfer_id,
+        "progress": info.get("progress"),
+        "speed_bps": info.get("speed_bps", 0),
+        "bytes_transferred": info.get("bytes_transferred", 0),
+        "total_size": info.get("total_size", 0),
+    }
 
 
 @router.post("/cancel")

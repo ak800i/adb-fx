@@ -43,7 +43,7 @@ class ADBWrapper:
         """
         self.adb_path = adb_path or self._find_adb()
         self._active_transfers: Dict[str, subprocess.Popen] = {}
-        self._transfer_progress: Dict[str, int] = {}
+        self._transfer_progress: Dict[str, dict] = {}  # {progress, bytes_transferred, speed_bps, total_size}
         self._transfers_lock = threading.Lock()
     
     def _find_adb(self) -> str:
@@ -229,16 +229,34 @@ class ADBWrapper:
 
         def _monitor():
             last_logged_pct = -10
+            prev_bytes = 0
+            prev_time = time.monotonic()
+            # Exponential moving average factor for smoothing speed
+            ema_speed = 0.0
+            alpha = 0.3
             logger.info("MONITOR started [%s]: total_size=%d, interval=%.1fs", transfer_id, total_size, interval)
             while transfer_id in self._transfer_progress:
                 try:
                     current = size_fn()
                     if current is not None:
+                        now = time.monotonic()
+                        dt = now - prev_time
                         pct = min(int(current / total_size * 100), 99)
-                        self._transfer_progress[transfer_id] = pct
+                        # Calculate instantaneous speed
+                        if dt > 0:
+                            instant_speed = (current - prev_bytes) / dt
+                            ema_speed = alpha * instant_speed + (1 - alpha) * ema_speed
+                        prev_bytes = current
+                        prev_time = now
+                        self._transfer_progress[transfer_id] = {
+                            "progress": pct,
+                            "bytes_transferred": current,
+                            "speed_bps": max(0, int(ema_speed)),
+                            "total_size": total_size,
+                        }
                         if pct - last_logged_pct >= 10:
                             last_logged_pct = pct
-                            logger.info("PROGRESS [%s]: %d%% (%d / %d bytes)", transfer_id, pct, current, total_size)
+                            logger.info("PROGRESS [%s]: %d%% (%d / %d bytes, %.1f KB/s)", transfer_id, pct, current, total_size, ema_speed / 1024)
                     else:
                         logger.debug("MONITOR [%s]: size_fn returned None", transfer_id)
                 except Exception as e:
@@ -249,8 +267,8 @@ class ADBWrapper:
         t = threading.Thread(target=_monitor, daemon=True)
         t.start()
 
-    def get_progress(self, transfer_id: str) -> Optional[int]:
-        """Get the current progress percentage (0-100) for a transfer, or None."""
+    def get_progress(self, transfer_id: str) -> Optional[dict]:
+        """Get the current progress info for a transfer, or None."""
         return self._transfer_progress.get(transfer_id)
 
     def cancel_transfer(self, transfer_id: str) -> bool:
@@ -517,7 +535,7 @@ class ADBWrapper:
 
         # Start file-size progress monitor for pulls
         if transfer_id:
-            self._transfer_progress[transfer_id] = 0
+            self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
             remote_size = self._get_remote_file_size_sync(device_id, remote_path)
             logger.debug("PULL [%s]: remote_size=%s, dest=%s", transfer_id, remote_size, local_path)
             if remote_size and remote_size > 0:
@@ -571,7 +589,7 @@ class ADBWrapper:
 
         # Start file-size progress monitor for pushes
         if transfer_id:
-            self._transfer_progress[transfer_id] = 0
+            self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
             local_size = os.path.getsize(local_path) if os.path.isfile(local_path) else 0
             logger.debug("PUSH [%s]: local_size=%s, dest=%s", transfer_id, local_size, remote_path)
             if local_size > 0:
