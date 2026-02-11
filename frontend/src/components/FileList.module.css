@@ -30,6 +30,7 @@
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   transition: background 0.15s ease;
+  user-select: none;
 }
 
 .row:hover {
