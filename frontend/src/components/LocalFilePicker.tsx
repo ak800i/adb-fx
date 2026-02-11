@@ -74,9 +74,17 @@ export function LocalFilePicker({
 
   const handleRowClick = useCallback((entry: LocalEntry) => {
     if (mode === 'directory') {
-      // In directory mode, clicking a folder navigates into it
+      // In directory mode, clicking a folder toggles its selection
       if (entry.type === 'directory') {
-        navigate(entry.path);
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(entry.path)) {
+            next.delete(entry.path);
+          } else {
+            next.add(entry.path);
+          }
+          return next;
+        });
       }
       return;
     }
@@ -101,8 +109,12 @@ export function LocalFilePicker({
 
   const handleSelect = useCallback(() => {
     if (mode === 'directory') {
-      // Select the current directory
-      onSelect([currentPath]);
+      // If specific folders are selected, use those; otherwise fall back to current directory
+      if (selected.size > 0) {
+        onSelect(Array.from(selected));
+      } else {
+        onSelect([currentPath]);
+      }
     } else {
       onSelect(Array.from(selected));
     }
@@ -121,7 +133,9 @@ export function LocalFilePicker({
 
   const footerText =
     mode === 'directory'
-      ? `Will use: ${currentPath}`
+      ? selected.size > 0
+        ? `${selected.size} folder(s) selected`
+        : `Will use: ${currentPath}`
       : selected.size > 0
         ? `${selected.size} item(s) selected`
         : 'Select files or folders to push';
@@ -190,6 +204,8 @@ export function LocalFilePicker({
               const isSelected = selected.has(entry.path);
               // In directory mode, files are shown but not interactive
               const isDisabled = mode === 'directory' && !isDir;
+              // Show checkboxes: always in files mode, only for folders in directory mode
+              const showCheckbox = mode === 'files' || (mode === 'directory' && isDir);
 
               return (
                 <div
@@ -198,7 +214,7 @@ export function LocalFilePicker({
                   onClick={() => !isDisabled && handleRowClick(entry)}
                   onDoubleClick={() => handleRowDoubleClick(entry)}
                 >
-                  {mode === 'files' && (
+                  {showCheckbox && (
                     <input
                       type="checkbox"
                       className={styles.checkbox}
@@ -236,7 +252,9 @@ export function LocalFilePicker({
               disabled={!canSelect}
             >
               {mode === 'directory'
-                ? 'Select Folder'
+                ? selected.size > 0
+                  ? `Select (${selected.size})`
+                  : 'Select Folder'
                 : `Select (${selected.size})`}
             </button>
           </div>

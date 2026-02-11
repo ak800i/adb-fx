@@ -213,6 +213,38 @@ class ADBWrapper:
             logger.debug("STAT exception: %s", e)
         return None
 
+    def _get_remote_dir_size_sync(self, device_id: str, remote_path: str) -> Optional[int]:
+        """Get total size of a directory tree on device via 'du -sb'. Returns None on failure."""
+        quoted = remote_path.replace("'", "'\\''")
+        shell_cmd = f"du -sb '{quoted}'"
+        try:
+            result = subprocess.run(
+                [self.adb_path, "-s", device_id, "shell", shell_cmd],
+                capture_output=True, timeout=10,
+            )
+            if result.returncode == 0:
+                # du -sb outputs: <size>\t<path>
+                size_str = result.stdout.decode().strip().split()[0]
+                if size_str.isdigit():
+                    return int(size_str)
+        except Exception as e:
+            logger.debug("DU exception: %s", e)
+        return None
+
+    @staticmethod
+    def _get_local_total_size(path: str) -> int:
+        """Get total size of a file or directory tree in bytes."""
+        if os.path.isfile(path):
+            return os.path.getsize(path)
+        total = 0
+        for dirpath, _dirnames, filenames in os.walk(path):
+            for f in filenames:
+                try:
+                    total += os.path.getsize(os.path.join(dirpath, f))
+                except OSError:
+                    pass
+        return total
+
     def _start_progress_monitor(
         self,
         transfer_id: str,
@@ -536,14 +568,26 @@ class ADBWrapper:
         # Start file-size progress monitor for pulls
         if transfer_id:
             self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
+            # Try single-file size first; if it's a directory, use du -sb
             remote_size = self._get_remote_file_size_sync(device_id, remote_path)
-            logger.debug("PULL [%s]: remote_size=%s, dest=%s", transfer_id, remote_size, local_path)
+            is_remote_dir = False
+            if remote_size is not None and remote_size < 4096:
+                # Small stat result could be a directory metadata entry — verify with du
+                dir_size = self._get_remote_dir_size_sync(device_id, remote_path)
+                if dir_size is not None and dir_size > remote_size:
+                    remote_size = dir_size
+                    is_remote_dir = True
+            logger.debug("PULL [%s]: remote_size=%s, is_dir=%s, dest=%s", transfer_id, remote_size, is_remote_dir, local_path)
             if remote_size and remote_size > 0:
-                def check_local_size():
-                    try:
-                        return os.path.getsize(local_path)
-                    except OSError:
-                        return 0
+                if is_remote_dir:
+                    def check_local_size():
+                        return self._get_local_total_size(local_path)
+                else:
+                    def check_local_size():
+                        try:
+                            return os.path.getsize(local_path)
+                        except OSError:
+                            return 0
                 self._start_progress_monitor(transfer_id, remote_size, check_local_size)
 
         try:
@@ -590,12 +634,18 @@ class ADBWrapper:
         # Start file-size progress monitor for pushes
         if transfer_id:
             self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
-            local_size = os.path.getsize(local_path) if os.path.isfile(local_path) else 0
-            logger.debug("PUSH [%s]: local_size=%s, dest=%s", transfer_id, local_size, remote_path)
+            local_size = self._get_local_total_size(local_path)
+            is_dir = os.path.isdir(local_path)
+            logger.debug("PUSH [%s]: local_size=%s, is_dir=%s, dest=%s", transfer_id, local_size, is_dir, remote_path)
             if local_size > 0:
-                # Monitor destination file size on device via adb shell stat
-                def check_remote_size():
-                    return self._get_remote_file_size_sync(device_id, remote_path)
+                if is_dir:
+                    # For directories: monitor total remote dir size via du -sb
+                    def check_remote_size():
+                        return self._get_remote_dir_size_sync(device_id, remote_path)
+                else:
+                    # For single files: monitor destination file size via stat
+                    def check_remote_size():
+                        return self._get_remote_file_size_sync(device_id, remote_path)
                 self._start_progress_monitor(transfer_id, local_size, check_remote_size, interval=1.0)
 
         try:

@@ -304,11 +304,6 @@ function App() {
                 onToggleSelect={toggleSelection}
                 loading={filesLoading}
               />
-              <TransferQueue
-                transfers={transfers}
-                onDismiss={dismissTransfer}
-                onClearCompleted={clearCompletedTransfers}
-              />
             </>
           ) : (
             <div className={styles.noDevice}>
@@ -319,6 +314,13 @@ function App() {
           )}
         </main>
       </div>
+
+      {/* Transfer queue (fixed bottom bar) */}
+      <TransferQueue
+        transfers={transfers}
+        onDismiss={dismissTransfer}
+        onClearCompleted={clearCompletedTransfers}
+      />
 
       {/* Local file picker for upload/download */}
       <LocalFilePicker
