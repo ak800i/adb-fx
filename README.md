@@ -33,9 +33,10 @@ The only prerequisites are:
 - **New folder**, **Delete** (with confirmation), **Rename**
 - **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button in the transfer queue
 - **Transfer queue panel**: A persistent, collapsible panel pinned to the bottom of the content area (like a browser download manager). Active transfers show real-time progress bars, transfer speed (KB/s or MB/s), and cancel buttons; completed/failed/cancelled transfers remain visible until explicitly dismissed or cleared. Unlike ephemeral toast notifications, the transfer queue cannot be accidentally dismissed or auto-hidden during a long transfer.
-- **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes.
+- **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes. Progress endpoint also returns transfer speed (bytes/sec), not just percentage
 - **Transfer speed**: Displayed in the transfer queue as an exponentially-weighted moving average (smoothed), updated on each progress poll. Speed is computed on the backend from byte-count deltas between poll intervals.
 - **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
+- The file picker remembers last browsed path across sessions (survives page close)
 
 ## Design
 
