@@ -117,6 +117,18 @@ export const fileApi = {
   },
 
   /**
+   * Get progress percentage for an in-progress transfer
+   */
+  async getProgress(deviceId: string, transferId: string): Promise<number | null> {
+    const params = new URLSearchParams({ transfer_id: transferId });
+    const response = await fetch(
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/progress?${params}`
+    );
+    const data = await response.json();
+    return data.progress ?? null;
+  },
+
+  /**
    * Create a directory on the device
    */
   async createDirectory(deviceId: string, path: string): Promise<OperationResult> {

@@ -9,6 +9,7 @@ import os
 import logging
 import shutil
 import threading
+import time
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict
 from datetime import datetime
@@ -42,6 +43,7 @@ class ADBWrapper:
         """
         self.adb_path = adb_path or self._find_adb()
         self._active_transfers: Dict[str, subprocess.Popen] = {}
+        self._transfer_progress: Dict[str, int] = {}
         self._transfers_lock = threading.Lock()
     
     def _find_adb(self) -> str:
@@ -137,7 +139,9 @@ class ADBWrapper:
     ) -> Tuple[str, str, int]:
         """
         Run an ADB command that can be cancelled via transfer_id.
-        Uses Popen so the process handle can be killed.
+        Uses Popen so the process handle can be killed on cancel.
+        Note: ADB does NOT output progress to piped stderr (only to TTY),
+        so progress is tracked separately via file-size monitoring.
         """
         cmd = [self.adb_path]
         if device_id:
@@ -188,10 +192,72 @@ class ADBWrapper:
                 " ".join(cmd)
             )
 
+    def _get_remote_file_size_sync(self, device_id: str, remote_path: str) -> Optional[int]:
+        """Get file size on device via sync subprocess. Returns None on failure."""
+        # Quote the path for the device shell (escape single quotes, wrap in single quotes)
+        quoted = remote_path.replace("'", "'\\''")
+        shell_cmd = f"stat -c %s '{quoted}'"
+        try:
+            result = subprocess.run(
+                [self.adb_path, "-s", device_id, "shell", shell_cmd],
+                capture_output=True, timeout=5,
+            )
+            if result.returncode == 0:
+                size_str = result.stdout.decode().strip()
+                if size_str.isdigit():
+                    return int(size_str)
+                logger.debug("STAT unexpected output: %r", size_str)
+            else:
+                logger.debug("STAT failed (rc=%d): %s", result.returncode, result.stderr.decode().strip())
+        except Exception as e:
+            logger.debug("STAT exception: %s", e)
+        return None
+
+    def _start_progress_monitor(
+        self,
+        transfer_id: str,
+        total_size: int,
+        size_fn,
+        interval: float = 0.5,
+    ) -> None:
+        """
+        Start a daemon thread that polls size_fn() and updates _transfer_progress.
+        Runs until transfer_id is removed from _transfer_progress.
+        """
+        if total_size <= 0:
+            return
+
+        def _monitor():
+            last_logged_pct = -10
+            logger.info("MONITOR started [%s]: total_size=%d, interval=%.1fs", transfer_id, total_size, interval)
+            while transfer_id in self._transfer_progress:
+                try:
+                    current = size_fn()
+                    if current is not None:
+                        pct = min(int(current / total_size * 100), 99)
+                        self._transfer_progress[transfer_id] = pct
+                        if pct - last_logged_pct >= 10:
+                            last_logged_pct = pct
+                            logger.info("PROGRESS [%s]: %d%% (%d / %d bytes)", transfer_id, pct, current, total_size)
+                    else:
+                        logger.debug("MONITOR [%s]: size_fn returned None", transfer_id)
+                except Exception as e:
+                    logger.debug("MONITOR [%s] error: %s", transfer_id, e)
+                time.sleep(interval)
+            logger.info("MONITOR stopped [%s]", transfer_id)
+
+        t = threading.Thread(target=_monitor, daemon=True)
+        t.start()
+
+    def get_progress(self, transfer_id: str) -> Optional[int]:
+        """Get the current progress percentage (0-100) for a transfer, or None."""
+        return self._transfer_progress.get(transfer_id)
+
     def cancel_transfer(self, transfer_id: str) -> bool:
         """Cancel a running transfer by killing its subprocess."""
         with self._transfers_lock:
             proc = self._active_transfers.pop(transfer_id, None)
+        self._transfer_progress.pop(transfer_id, None)
         if proc:
             try:
                 proc.kill()
@@ -448,14 +514,31 @@ class ADBWrapper:
         """
         # Ensure local directory exists
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        
-        stdout, stderr, code = await self._run_cancellable(
-            "pull", remote_path, local_path,
-            device_id=device_id,
-            transfer_id=transfer_id,
-            timeout=300,
-        )
-        
+
+        # Start file-size progress monitor for pulls
+        if transfer_id:
+            self._transfer_progress[transfer_id] = 0
+            remote_size = self._get_remote_file_size_sync(device_id, remote_path)
+            logger.debug("PULL [%s]: remote_size=%s, dest=%s", transfer_id, remote_size, local_path)
+            if remote_size and remote_size > 0:
+                def check_local_size():
+                    try:
+                        return os.path.getsize(local_path)
+                    except OSError:
+                        return 0
+                self._start_progress_monitor(transfer_id, remote_size, check_local_size)
+
+        try:
+            stdout, stderr, code = await self._run_cancellable(
+                "pull", remote_path, local_path,
+                device_id=device_id,
+                transfer_id=transfer_id,
+                timeout=300,
+            )
+        finally:
+            if transfer_id:
+                self._transfer_progress.pop(transfer_id, None)
+
         if code != 0:
             # Check if killed by cancel
             if code < 0 or 'killed' in (stderr or '').lower():
@@ -485,14 +568,29 @@ class ADBWrapper:
         """
         if not os.path.exists(local_path):
             raise ADBError(f"Local file not found: {local_path}")
-        
-        stdout, stderr, code = await self._run_cancellable(
-            "push", local_path, remote_path,
-            device_id=device_id,
-            transfer_id=transfer_id,
-            timeout=300,
-        )
-        
+
+        # Start file-size progress monitor for pushes
+        if transfer_id:
+            self._transfer_progress[transfer_id] = 0
+            local_size = os.path.getsize(local_path) if os.path.isfile(local_path) else 0
+            logger.debug("PUSH [%s]: local_size=%s, dest=%s", transfer_id, local_size, remote_path)
+            if local_size > 0:
+                # Monitor destination file size on device via adb shell stat
+                def check_remote_size():
+                    return self._get_remote_file_size_sync(device_id, remote_path)
+                self._start_progress_monitor(transfer_id, local_size, check_remote_size, interval=1.0)
+
+        try:
+            stdout, stderr, code = await self._run_cancellable(
+                "push", local_path, remote_path,
+                device_id=device_id,
+                transfer_id=transfer_id,
+                timeout=300,
+            )
+        finally:
+            if transfer_id:
+                self._transfer_progress.pop(transfer_id, None)
+
         if code != 0:
             if code < 0 or 'killed' in (stderr or '').lower():
                 raise ADBError("Transfer cancelled")

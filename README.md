@@ -32,6 +32,7 @@ The only prerequisites are:
 - **Download**: Select device files → local folder picker → backend pulls directly to that folder
 - **New folder**, **Delete** (with confirmation), **Rename**
 - **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button on the toast notification
+- **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes.
 - **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
 
 ## Design
@@ -46,6 +47,20 @@ The only prerequisites are:
 ## Key Design Decision
 
 The backend has full access to both the local filesystem and ADB, so file transfers are **single-hop**: local disk ↔ device. The frontend never touches file bytes — it only sends paths as strings in API calls.
+
+## Technical Notes
+
+### Transfer Progress
+
+ADB **suppresses progress output** when stdout/stderr are pipes (only writes progress to a real TTY). Attempts to read progress incrementally from pipes — including unbuffered raw reads — yield nothing until the transfer completes.
+
+**Workaround**: Progress is tracked by monitoring destination file size growth:
+- **Pull** (device → local): A daemon thread polls `os.path.getsize(local_path)` every **500ms** against the remote file size (obtained upfront via `adb shell stat`)
+- **Push** (local → device): A daemon thread polls `adb shell stat -c %s '<remote_path>'` every **1s** (longer interval due to ADB shell round-trip cost) against `os.path.getsize(local_path)`
+
+Progress is capped at 99% until the ADB process actually exits successfully.
+
+**Path quoting**: Remote paths passed to `adb shell stat` must be wrapped in single quotes with internal single quotes escaped (`'` → `'\''`), since `adb shell` concatenates all args into a single shell command string. Without this, paths containing spaces or parentheses (e.g. `F1 (2025)`) cause `stat` to fail silently.
 
 ## Project Structure
 
@@ -89,6 +104,7 @@ adb-fx/
 | DELETE | `/api/devices/{id}/files` | Delete file or folder |
 | POST | `/api/devices/{id}/files/rename` | Rename/move file or folder |
 | POST | `/api/devices/{id}/files/cancel` | Cancel an in-progress transfer |
+| GET | `/api/devices/{id}/files/progress` | Get transfer progress (0-100%) |
 | GET | `/api/local/drives` | List Windows drive letters |
 | GET | `/api/local/list` | Browse local directory contents |
 

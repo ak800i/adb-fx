@@ -113,10 +113,31 @@ function App() {
       setToasts((prev) =>
         prev.map((t) =>
           t.id === toastId
-            ? { ...t, type: 'info' as const, message: `Cancelling...`, onCancel: undefined }
+            ? { ...t, type: 'info' as const, message: `Cancelling...`, onCancel: undefined, progress: undefined }
             : t
         )
       );
+    };
+
+    // Start polling progress for a transfer, returns cleanup function
+    const startProgressPoll = (deviceId: string, transferId: string, toastId: string) => {
+      const interval = setInterval(async () => {
+        try {
+          const pct = await fileApi.getProgress(deviceId, transferId);
+          if (pct !== null) {
+            setToasts((prev) =>
+              prev.map((t) =>
+                t.id === toastId && t.type === 'info'
+                  ? { ...t, progress: pct }
+                  : t
+              )
+            );
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 500);
+      return () => clearInterval(interval);
     };
 
     if (pickerAction === 'upload') {
@@ -131,16 +152,19 @@ function App() {
             id: toastId,
             type: 'info',
             message: `Pushing: ${name}...`,
+            progress: 0,
             onCancel: () => cancelTransfer(selectedDevice.id, transferId, toastId),
           },
         ]);
 
+        const stopPolling = startProgressPoll(selectedDevice.id, transferId, toastId);
         try {
           await fileApi.pushLocal(selectedDevice.id, localPath, currentPath, transferId);
+          stopPolling();
           setToasts((prev) =>
             prev.map((t) =>
               t.id === toastId
-                ? { ...t, type: 'success' as const, message: `Pushed: ${name}`, onCancel: undefined }
+                ? { ...t, type: 'success' as const, message: `Pushed: ${name}`, onCancel: undefined, progress: undefined }
                 : t
             )
           );
@@ -148,6 +172,7 @@ function App() {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
           }, 4000);
         } catch (err) {
+          stopPolling();
           const msg = err instanceof Error ? err.message : 'Unknown error';
           const cancelled = msg.toLowerCase().includes('cancel');
           setToasts((prev) =>
@@ -158,6 +183,7 @@ function App() {
                     type: cancelled ? ('info' as const) : ('error' as const),
                     message: cancelled ? `Cancelled: ${name}` : `Failed: ${name}: ${msg}`,
                     onCancel: undefined,
+                    progress: undefined,
                   }
                 : t
             )
@@ -181,16 +207,19 @@ function App() {
             id: toastId,
             type: 'info',
             message: `Pulling: ${name}...`,
+            progress: 0,
             onCancel: () => cancelTransfer(selectedDevice.id, transferId, toastId),
           },
         ]);
 
+        const stopPolling = startProgressPoll(selectedDevice.id, transferId, toastId);
         try {
           const result = await fileApi.pullToLocal(selectedDevice.id, remotePath, localDir, transferId);
+          stopPolling();
           setToasts((prev) =>
             prev.map((t) =>
               t.id === toastId
-                ? { ...t, type: 'success' as const, message: `Saved: ${name} → ${result.path}`, onCancel: undefined }
+                ? { ...t, type: 'success' as const, message: `Saved: ${name} → ${result.path}`, onCancel: undefined, progress: undefined }
                 : t
             )
           );
@@ -198,6 +227,7 @@ function App() {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
           }, 4000);
         } catch (err) {
+          stopPolling();
           const msg = err instanceof Error ? err.message : 'Unknown error';
           const cancelled = msg.toLowerCase().includes('cancel');
           setToasts((prev) =>
@@ -208,6 +238,7 @@ function App() {
                     type: cancelled ? ('info' as const) : ('error' as const),
                     message: cancelled ? `Cancelled: ${name}` : `Failed: ${name}: ${msg}`,
                     onCancel: undefined,
+                    progress: undefined,
                   }
                 : t
             )

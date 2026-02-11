@@ -84,6 +84,16 @@ async def pull_to_local(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/progress")
+async def get_progress(
+    device_id: str,
+    transfer_id: str = Query(..., description="Transfer ID to check"),
+):
+    """Get progress percentage for an in-progress transfer."""
+    progress = adb.get_progress(transfer_id)
+    return {"transfer_id": transfer_id, "progress": progress}
+
+
 @router.post("/cancel")
 async def cancel_transfer(
     device_id: str,
