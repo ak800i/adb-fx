@@ -29,39 +29,6 @@ async def list_files(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/download")
-async def download_file(
-    device_id: str,
-    path: str = Query(..., description="File path on device to download")
-):
-    """Download a file from the device."""
-    try:
-        # Check if it's a file
-        is_dir = await adb.is_directory(device_id, path)
-        if is_dir:
-            raise HTTPException(
-                status_code=400, 
-                detail="Cannot download a directory. Please select a file."
-            )
-        
-        # Create temp file with unique name
-        filename = os.path.basename(path)
-        temp_path = os.path.join(TEMP_DIR, f"{uuid.uuid4()}_{filename}")
-        
-        # Pull file from device
-        await adb.pull_file(device_id, path, temp_path)
-        
-        # Return file as response
-        return FileResponse(
-            temp_path,
-            filename=filename,
-            media_type="application/octet-stream",
-            background=None  # File will be cleaned up later
-        )
-    except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @router.post("/push", response_model=OperationResult)
 async def push_local(
     device_id: str,

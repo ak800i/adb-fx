@@ -70,29 +70,6 @@ export const fileApi = {
   },
 
   /**
-   * Download a file from the device (browser download via HTTP)
-   */
-  async downloadFile(deviceId: string, path: string): Promise<Blob> {
-    const params = new URLSearchParams({ path });
-    const response = await fetch(
-      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/download?${params}`
-    );
-    
-    if (!response.ok) {
-      let message = `HTTP ${response.status}`;
-      try {
-        const data = await response.json();
-        message = data.detail || data.message || message;
-      } catch {
-        // Response might not be JSON
-      }
-      throw new ApiError(response.status, message);
-    }
-    
-    return response.blob();
-  },
-
-  /**
    * Push a local file/folder directly to the device (no HTTP file transfer)
    */
   async pushLocal(
