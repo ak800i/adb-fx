@@ -8,6 +8,7 @@ import { InputModal, ConfirmModal } from './components/Modal';
 import { Toast, ToastMessage } from './components/Toast';
 import { fileApi } from './services/api';
 import type { FileEntry } from './types';
+import { Upload } from 'lucide-react';
 import styles from './App.module.css';
 
 function App() {
@@ -40,6 +41,8 @@ function App() {
   // File upload input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounter = useRef(0);
 
   // Load files when device changes
   useEffect(() => {
@@ -105,62 +108,87 @@ function App() {
     );
   }, []);
 
+  const formatSize = useCallback((bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }, []);
+
+  const uploadSingleFile = useCallback(async (
+    file: File,
+    destPath: string,
+    displayName: string,
+  ) => {
+    const toastId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    setToasts((prev) => [
+      ...prev,
+      { id: toastId, type: 'info', message: `Uploading: ${displayName} (0%)`, progress: 0 },
+    ]);
+
+    try {
+      await fileApi.uploadFile(selectedDevice!.id, file, destPath, (loaded, total) => {
+        const pct = Math.round((loaded / total) * 100);
+        updateToastProgress(
+          toastId,
+          pct,
+          `Uploading: ${displayName} \u2014 ${formatSize(loaded)} / ${formatSize(total)} (${pct}%)`
+        );
+      });
+
+      setToasts((prev) =>
+        prev.map((t) =>
+          t.id === toastId
+            ? { ...t, type: 'success' as const, message: `Uploaded: ${displayName}`, progress: undefined }
+            : t
+        )
+      );
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, 4000);
+    } catch (err) {
+      setToasts((prev) =>
+        prev.map((t) =>
+          t.id === toastId
+            ? { ...t, type: 'error' as const, message: `Failed: ${displayName}: ${err instanceof Error ? err.message : 'Unknown error'}`, progress: undefined }
+            : t
+        )
+      );
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, 6000);
+    }
+  }, [selectedDevice, updateToastProgress, formatSize]);
+
   const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !selectedDevice) return;
 
+    const isFolder = !!(files[0] as any).webkitRelativePath;
+
     for (const file of Array.from(files)) {
-      const toastId = `upload-${Date.now()}-${file.name}`;
-      const formatSize = (bytes: number) => {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-      };
+      let destPath = currentPath;
+      let displayName = file.name;
+      const relativePath = (file as any).webkitRelativePath as string;
 
-      setToasts((prev) => [
-        ...prev,
-        { id: toastId, type: 'info', message: `Uploading: ${file.name} (0%)`, progress: 0 },
-      ]);
-
-      try {
-        await fileApi.uploadFile(selectedDevice.id, file, currentPath, (loaded, total) => {
-          const pct = Math.round((loaded / total) * 100);
-          updateToastProgress(
-            toastId,
-            pct,
-            `Uploading: ${file.name} — ${formatSize(loaded)} / ${formatSize(total)} (${pct}%)`
-          );
-        });
-
-        // Replace progress toast with success
-        setToasts((prev) =>
-          prev.map((t) =>
-            t.id === toastId
-              ? { ...t, type: 'success' as const, message: `Uploaded: ${file.name}`, progress: undefined }
-              : t
-          )
-        );
-        setTimeout(() => {
-          setToasts((prev) => prev.filter((t) => t.id !== toastId));
-        }, 4000);
-      } catch (err) {
-        setToasts((prev) =>
-          prev.map((t) =>
-            t.id === toastId
-              ? { ...t, type: 'error' as const, message: `Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`, progress: undefined }
-              : t
-          )
-        );
-        setTimeout(() => {
-          setToasts((prev) => prev.filter((t) => t.id !== toastId));
-        }, 6000);
+      if (isFolder && relativePath) {
+        const relativeDir = relativePath.substring(0, relativePath.lastIndexOf('/'));
+        destPath = `${currentPath}/${relativeDir}`.replace(/\/+/g, '/');
+        displayName = relativePath;
       }
+
+      if (isFolder && destPath !== currentPath) {
+        try {
+          await fileApi.createDirectory(selectedDevice.id, destPath);
+        } catch { /* directory may already exist */ }
+      }
+
+      await uploadSingleFile(file, destPath, displayName);
     }
-    
-    // Reset input and refresh
+
     e.target.value = '';
     refresh();
-  }, [selectedDevice, currentPath, updateToastProgress, refresh]);
+  }, [selectedDevice, currentPath, uploadSingleFile, refresh]);
 
   const handleDownload = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;
@@ -215,6 +243,98 @@ function App() {
     navigateTo('/sdcard');
   }, [navigateTo]);
 
+  // --- Drag and drop ---
+  const readEntryAsFile = (entry: FileSystemFileEntry): Promise<File> =>
+    new Promise((resolve, reject) => entry.file(resolve, reject));
+
+  const readDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
+    new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+
+  const collectFiles = async (
+    entry: FileSystemEntry,
+    basePath: string,
+  ): Promise<{ file: File; relativePath: string }[]> => {
+    if (entry.isFile) {
+      const file = await readEntryAsFile(entry as FileSystemFileEntry);
+      return [{ file, relativePath: basePath ? `${basePath}/${entry.name}` : entry.name }];
+    }
+    const dirEntry = entry as FileSystemDirectoryEntry;
+    const reader = dirEntry.createReader();
+    const results: { file: File; relativePath: string }[] = [];
+    const subPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+    let entries: FileSystemEntry[];
+    do {
+      entries = await readDirectoryEntries(reader);
+      for (const child of entries) {
+        results.push(...(await collectFiles(child, subPath)));
+      }
+    } while (entries.length > 0);
+    return results;
+  };
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDragOver(false);
+
+    if (!selectedDevice) return;
+
+    const items = e.dataTransfer.items;
+    const allFiles: { file: File; relativePath: string }[] = [];
+
+    // Use webkitGetAsEntry to support folders
+    const entries: FileSystemEntry[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry?.();
+      if (entry) entries.push(entry);
+    }
+
+    for (const entry of entries) {
+      allFiles.push(...(await collectFiles(entry, '')));
+    }
+
+    // Upload all collected files
+    for (const { file, relativePath } of allFiles) {
+      const relativeDir = relativePath.includes('/')
+        ? relativePath.substring(0, relativePath.lastIndexOf('/'))
+        : '';
+      const destPath = relativeDir
+        ? `${currentPath}/${relativeDir}`.replace(/\/+/g, '/')
+        : currentPath;
+
+      if (relativeDir) {
+        try {
+          await fileApi.createDirectory(selectedDevice.id, destPath);
+        } catch { /* directory may already exist */ }
+      }
+
+      await uploadSingleFile(file, destPath, relativePath);
+    }
+
+    refresh();
+  }, [selectedDevice, currentPath, uploadSingleFile, refresh]);
+
   return (
     <div className={styles.app}>
       {/* Header */}
@@ -239,7 +359,19 @@ function App() {
         </aside>
 
         {/* File browser */}
-        <main className={styles.content}>
+        <main
+          className={`${styles.content} ${isDragOver ? styles.dropActive : ''}`}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          {isDragOver && (
+            <div className={styles.dropOverlay}>
+              <Upload size={48} />
+              <p>Drop files or folders to upload</p>
+            </div>
+          )}
           {selectedDevice?.state === 'device' ? (
             <>
               <Toolbar
