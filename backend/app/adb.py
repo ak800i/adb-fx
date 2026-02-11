@@ -6,10 +6,13 @@ import asyncio
 import subprocess
 import re
 import os
+import logging
 import shutil
 from pathlib import Path
 from typing import List, Optional, Tuple
 from datetime import datetime
+
+logger = logging.getLogger("adb")
 from .models import (
     Device, DeviceState, FileEntry, FileType, 
     FileListResponse, DeviceStorageInfo
@@ -88,6 +91,8 @@ class ADBWrapper:
         
         cmd.extend(args)
         
+        logger.debug("CMD: %s", " ".join(cmd))
+        
         try:
             result = await asyncio.to_thread(
                 subprocess.run,
@@ -96,12 +101,18 @@ class ADBWrapper:
                 timeout=timeout,
             )
             
-            return (
-                result.stdout.decode("utf-8", errors="replace"),
-                result.stderr.decode("utf-8", errors="replace"),
-                result.returncode,
-            )
+            stdout = result.stdout.decode("utf-8", errors="replace")
+            stderr = result.stderr.decode("utf-8", errors="replace")
+            
+            logger.debug("EXIT: %d", result.returncode)
+            if stdout.strip():
+                logger.debug("STDOUT: %s", stdout.strip())
+            if stderr.strip():
+                logger.debug("STDERR: %s", stderr.strip())
+            
+            return (stdout, stderr, result.returncode)
         except subprocess.TimeoutExpired:
+            logger.error("TIMEOUT: %s (after %ds)", " ".join(cmd), timeout)
             raise ADBError(f"Command timed out after {timeout}s", " ".join(cmd))
         except FileNotFoundError:
             raise ADBError(

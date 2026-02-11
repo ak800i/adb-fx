@@ -90,23 +90,72 @@ function App() {
     fileInputRef.current?.click();
   }, []);
 
+  const updateToastProgress = useCallback((id: string, progress: number, message?: string) => {
+    setToasts((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, progress, ...(message ? { message } : {}) }
+          : t
+      )
+    );
+  }, []);
+
   const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !selectedDevice) return;
 
     for (const file of Array.from(files)) {
+      const toastId = `upload-${Date.now()}-${file.name}`;
+      const formatSize = (bytes: number) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      };
+
+      setToasts((prev) => [
+        ...prev,
+        { id: toastId, type: 'info', message: `Uploading: ${file.name} (0%)`, progress: 0 },
+      ]);
+
       try {
-        await fileApi.uploadFile(selectedDevice.id, file, currentPath);
-        addToast('success', `Uploaded: ${file.name}`);
+        await fileApi.uploadFile(selectedDevice.id, file, currentPath, (loaded, total) => {
+          const pct = Math.round((loaded / total) * 100);
+          updateToastProgress(
+            toastId,
+            pct,
+            `Uploading: ${file.name} — ${formatSize(loaded)} / ${formatSize(total)} (${pct}%)`
+          );
+        });
+
+        // Replace progress toast with success
+        setToasts((prev) =>
+          prev.map((t) =>
+            t.id === toastId
+              ? { ...t, type: 'success' as const, message: `Uploaded: ${file.name}`, progress: undefined }
+              : t
+          )
+        );
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== toastId));
+        }, 4000);
       } catch (err) {
-        addToast('error', `Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setToasts((prev) =>
+          prev.map((t) =>
+            t.id === toastId
+              ? { ...t, type: 'error' as const, message: `Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`, progress: undefined }
+              : t
+          )
+        );
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== toastId));
+        }, 6000);
       }
     }
     
     // Reset input and refresh
     e.target.value = '';
     refresh();
-  }, [selectedDevice, currentPath, addToast, refresh]);
+  }, [selectedDevice, currentPath, updateToastProgress, refresh]);
 
   const handleDownload = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;

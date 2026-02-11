@@ -97,20 +97,48 @@ export const fileApi = {
   async uploadFile(
     deviceId: string, 
     file: File, 
-    destinationPath: string
+    destinationPath: string,
+    onProgress?: (loaded: number, total: number) => void
   ): Promise<OperationResult> {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const params = new URLSearchParams({ path: destinationPath });
-    const response = await fetch(
-      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/upload?${params}`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
-    return handleResponse<OperationResult>(response);
+    const url = `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/upload?${params}`;
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(e.loaded, e.total);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(data as OperationResult);
+          } else {
+            reject(new ApiError(xhr.status, data.detail || data.message || `HTTP ${xhr.status}`));
+          }
+        } catch {
+          reject(new ApiError(xhr.status, `HTTP ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new ApiError(0, 'Network error during upload'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        reject(new ApiError(0, 'Upload aborted'));
+      });
+
+      xhr.send(formData);
+    });
   },
 
   /**

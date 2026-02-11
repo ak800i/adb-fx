@@ -3,10 +3,15 @@ ADB File Explorer - FastAPI Backend
 
 A REST API for managing files on Android devices via ADB.
 """
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import devices, files
+
+# Enable debug logging for ADB commands
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("adb").setLevel(logging.DEBUG)
 
 # Create FastAPI application
 app = FastAPI(
