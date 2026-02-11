@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useDevices } from './hooks/useDevices';
 import { useFileBrowser } from './hooks/useFileBrowser';
 import { DeviceSelector } from './components/DeviceSelector';
@@ -116,20 +116,44 @@ function App() {
   }, []);
 
   const clearCompletedTransfers = useCallback(() => {
-    setTransfers((prev) => prev.filter((t) => t.status === 'active'));
+    setTransfers((prev) => prev.filter((t) => t.status === 'active' || t.status === 'queued'));
+  }, []);
+
+  // Serial transfer queue — chains each transfer onto a promise so only one runs at a time
+  const queueTail = useRef<Promise<void>>(Promise.resolve());
+
+  const enqueueTransfer = useCallback((
+    item: TransferItem,
+    execute: (itemId: string, transferId: string) => Promise<void>,
+  ) => {
+    // Add item to UI immediately as 'queued'
+    setTransfers((prev) => [...prev, item]);
+
+    // Chain onto serial queue
+    queueTail.current = queueTail.current.then(async () => {
+      // Mark as active
+      const cancelFn = item.onCancel;
+      setTransfers((prev) =>
+        prev.map((t) => (t.id === item.id ? { ...t, status: 'active' as const, onCancel: cancelFn } : t))
+      );
+
+      await execute(item.id, item.transferId);
+    });
   }, []);
 
   const handlePickerSelect = useCallback(async (paths: string[]) => {
     setPickerOpen(false);
     if (!selectedDevice || paths.length === 0) return;
 
-    const cancelTransfer = (deviceId: string, transferId: string, itemId: string) => {
+    const deviceId = selectedDevice.id;
+
+    const cancelTransfer = (transferId: string, itemId: string) => {
       fileApi.cancelTransfer(deviceId, transferId).catch(() => {});
       updateTransfer(itemId, { status: 'cancelled', onCancel: undefined });
     };
 
     // Start polling progress for a transfer, returns cleanup function
-    const startProgressPoll = (deviceId: string, transferId: string, itemId: string) => {
+    const startProgressPoll = (transferId: string, itemId: string) => {
       const interval = setInterval(async () => {
         try {
           const info = await fileApi.getProgress(deviceId, transferId);
@@ -150,7 +174,7 @@ function App() {
     };
 
     if (pickerAction === 'upload') {
-      // Push local files/folders directly to device
+      const remoteDest = currentPath;
       for (const localPath of paths) {
         const name = localPath.replace(/\\/g, '/').split('/').pop() || localPath;
         const itemId = `push-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -161,32 +185,32 @@ function App() {
           transferId,
           fileName: name,
           direction: 'push',
-          status: 'active',
+          status: 'queued',
           progress: 0,
           speedBps: 0,
-          onCancel: () => cancelTransfer(selectedDevice.id, transferId, itemId),
+          onCancel: () => cancelTransfer(transferId, itemId),
         };
-        setTransfers((prev) => [...prev, item]);
 
-        const stopPolling = startProgressPoll(selectedDevice.id, transferId, itemId);
-        try {
-          await fileApi.pushLocal(selectedDevice.id, localPath, currentPath, transferId);
-          stopPolling();
-          updateTransfer(itemId, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
-        } catch (err) {
-          stopPolling();
-          const msg = err instanceof Error ? err.message : 'Unknown error';
-          const cancelled = msg.toLowerCase().includes('cancel');
-          updateTransfer(itemId, {
-            status: cancelled ? 'cancelled' : 'failed',
-            error: cancelled ? undefined : msg,
-            onCancel: undefined,
-          });
-        }
+        enqueueTransfer(item, async (iid, tid) => {
+          const stopPolling = startProgressPoll(tid, iid);
+          try {
+            await fileApi.pushLocal(deviceId, localPath, remoteDest, tid);
+            stopPolling();
+            updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
+          } catch (err) {
+            stopPolling();
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            const cancelled = msg.toLowerCase().includes('cancel');
+            updateTransfer(iid, {
+              status: cancelled ? 'cancelled' : 'failed',
+              error: cancelled ? undefined : msg,
+              onCancel: undefined,
+            });
+          }
+          refresh();
+        });
       }
-      refresh();
     } else {
-      // Pull device files to local directory
       const localDir = paths[0];
       for (const remotePath of selectedFiles) {
         const name = remotePath.split('/').pop() || remotePath;
@@ -198,32 +222,33 @@ function App() {
           transferId,
           fileName: name,
           direction: 'pull',
-          status: 'active',
+          status: 'queued',
           progress: 0,
           speedBps: 0,
-          onCancel: () => cancelTransfer(selectedDevice.id, transferId, itemId),
+          onCancel: () => cancelTransfer(transferId, itemId),
         };
-        setTransfers((prev) => [...prev, item]);
 
-        const stopPolling = startProgressPoll(selectedDevice.id, transferId, itemId);
-        try {
-          await fileApi.pullToLocal(selectedDevice.id, remotePath, localDir, transferId);
-          stopPolling();
-          updateTransfer(itemId, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
-        } catch (err) {
-          stopPolling();
-          const msg = err instanceof Error ? err.message : 'Unknown error';
-          const cancelled = msg.toLowerCase().includes('cancel');
-          updateTransfer(itemId, {
-            status: cancelled ? 'cancelled' : 'failed',
-            error: cancelled ? undefined : msg,
-            onCancel: undefined,
-          });
-        }
+        enqueueTransfer(item, async (iid, tid) => {
+          const stopPolling = startProgressPoll(tid, iid);
+          try {
+            await fileApi.pullToLocal(deviceId, remotePath, localDir, tid);
+            stopPolling();
+            updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
+          } catch (err) {
+            stopPolling();
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            const cancelled = msg.toLowerCase().includes('cancel');
+            updateTransfer(iid, {
+              status: cancelled ? 'cancelled' : 'failed',
+              error: cancelled ? undefined : msg,
+              onCancel: undefined,
+            });
+          }
+        });
       }
       clearSelection();
     }
-  }, [selectedDevice, currentPath, pickerAction, selectedFiles, refresh, clearSelection, updateTransfer]);
+  }, [selectedDevice, currentPath, pickerAction, selectedFiles, refresh, clearSelection, updateTransfer, enqueueTransfer]);
 
   const handleDownload = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;

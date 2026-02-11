@@ -6,6 +6,7 @@ import {
   StopCircle,
   CheckCircle,
   AlertCircle,
+  Clock,
   ChevronDown,
   ChevronUp,
   Trash2,
@@ -13,7 +14,7 @@ import {
 import styles from './TransferQueue.module.css';
 
 export type TransferDirection = 'push' | 'pull';
-export type TransferStatus = 'active' | 'completed' | 'failed' | 'cancelled';
+export type TransferStatus = 'queued' | 'active' | 'completed' | 'failed' | 'cancelled';
 
 export interface TransferItem {
   id: string;
@@ -46,7 +47,8 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
   if (transfers.length === 0) return null;
 
   const activeCount = transfers.filter((t) => t.status === 'active').length;
-  const completedCount = transfers.filter((t) => t.status !== 'active').length;
+  const queuedCount = transfers.filter((t) => t.status === 'queued').length;
+  const completedCount = transfers.filter((t) => t.status !== 'active' && t.status !== 'queued').length;
 
   return (
     <div className={styles.panel}>
@@ -56,6 +58,9 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
           Transfers
           {activeCount > 0 && (
             <span className={styles.badge}>{activeCount} active</span>
+          )}
+          {queuedCount > 0 && (
+            <span className={styles.badgeQueued}>{queuedCount} queued</span>
           )}
         </span>
         <span className={styles.headerActions}>
@@ -87,6 +92,8 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                   <CheckCircle size={16} />
                 ) : t.status === 'failed' ? (
                   <AlertCircle size={16} />
+                ) : t.status === 'queued' ? (
+                  <Clock size={16} />
                 ) : t.direction === 'push' ? (
                   <Upload size={16} />
                 ) : (
@@ -113,6 +120,9 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                 {t.status === 'cancelled' && (
                   <span className={styles.cancelled}>Cancelled</span>
                 )}
+                {t.status === 'queued' && (
+                  <span className={styles.queued}>Queued</span>
+                )}
               </div>
 
               {/* Speed + percentage for active */}
@@ -134,7 +144,7 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                 >
                   <StopCircle size={16} />
                 </button>
-              ) : t.status !== 'active' ? (
+              ) : t.status !== 'active' && t.status !== 'queued' ? (
                 <button
                   className={styles.dismissBtn}
                   onClick={() => onDismiss(t.id)}

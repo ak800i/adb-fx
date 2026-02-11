@@ -117,6 +117,10 @@
   color: var(--text-secondary);
 }
 
+.item.queued .icon {
+  color: var(--text-secondary);
+}
+
 /* File info */
 .info {
   flex: 1;
@@ -142,6 +146,21 @@
   font-size: 11px;
   color: var(--text-secondary);
   font-style: italic;
+}
+
+.queued {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.badgeQueued {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--text-secondary);
+  color: #111;
 }
 
 /* Progress bar */
