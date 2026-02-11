@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Device } from '../types';
 import { 
   Smartphone, 

@@ -7,7 +7,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import devices, files
+from .routes import devices, files, local
 
 # Enable debug logging for ADB commands
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +41,7 @@ app.add_middleware(
 # Include routers
 app.include_router(devices.router, prefix="/api")
 app.include_router(files.router, prefix="/api")
+app.include_router(local.router)
 
 
 @app.get("/")

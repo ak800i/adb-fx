@@ -1,14 +1,14 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useDevices } from './hooks/useDevices';
 import { useFileBrowser } from './hooks/useFileBrowser';
 import { DeviceSelector } from './components/DeviceSelector';
 import { Toolbar } from './components/Toolbar';
 import { FileList } from './components/FileList';
 import { InputModal, ConfirmModal } from './components/Modal';
+import { LocalFilePicker, PickerMode } from './components/LocalFilePicker';
 import { Toast, ToastMessage } from './components/Toast';
 import { fileApi } from './services/api';
 import type { FileEntry } from './types';
-import { Upload } from 'lucide-react';
 import styles from './App.module.css';
 
 function App() {
@@ -37,12 +37,12 @@ function App() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  
-  // File upload input refs
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const dragCounter = useRef(0);
+
+  // Local file picker state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<PickerMode>('files');
+  const [pickerTitle, setPickerTitle] = useState<string | undefined>();
+  const [pickerAction, setPickerAction] = useState<'upload' | 'download'>('upload');
 
   // Load files when device changes
   useEffect(() => {
@@ -91,136 +91,106 @@ function App() {
   }, [selectedDevice, currentPath, addToast, refresh]);
 
   const handleUpload = useCallback(() => {
-    fileInputRef.current?.click();
+    setPickerMode('files');
+    setPickerTitle('Select Files to Upload');
+    setPickerAction('upload');
+    setPickerOpen(true);
   }, []);
 
   const handleUploadFolder = useCallback(() => {
-    folderInputRef.current?.click();
+    setPickerMode('directory');
+    setPickerTitle('Select Folder to Upload');
+    setPickerAction('upload');
+    setPickerOpen(true);
   }, []);
 
-  const updateToastProgress = useCallback((id: string, progress: number, message?: string) => {
-    setToasts((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, progress, ...(message ? { message } : {}) }
-          : t
-      )
-    );
-  }, []);
+  const handlePickerSelect = useCallback(async (paths: string[]) => {
+    setPickerOpen(false);
+    if (!selectedDevice || paths.length === 0) return;
 
-  const formatSize = useCallback((bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }, []);
+    if (pickerAction === 'upload') {
+      // Push local files/folders directly to device
+      for (const localPath of paths) {
+        const name = localPath.replace(/\\/g, '/').split('/').pop() || localPath;
+        const toastId = `push-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setToasts((prev) => [
+          ...prev,
+          { id: toastId, type: 'info', message: `Pushing: ${name}...` },
+        ]);
 
-  const uploadSingleFile = useCallback(async (
-    file: File,
-    destPath: string,
-    displayName: string,
-  ) => {
-    const toastId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    setToasts((prev) => [
-      ...prev,
-      { id: toastId, type: 'info', message: `Uploading: ${displayName} (0%)`, progress: 0 },
-    ]);
-
-    try {
-      await fileApi.uploadFile(selectedDevice!.id, file, destPath, (loaded, total) => {
-        const pct = Math.round((loaded / total) * 100);
-        updateToastProgress(
-          toastId,
-          pct,
-          `Uploading: ${displayName} \u2014 ${formatSize(loaded)} / ${formatSize(total)} (${pct}%)`
-        );
-      });
-
-      setToasts((prev) =>
-        prev.map((t) =>
-          t.id === toastId
-            ? { ...t, type: 'success' as const, message: `Uploaded: ${displayName}`, progress: undefined }
-            : t
-        )
-      );
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== toastId));
-      }, 4000);
-    } catch (err) {
-      setToasts((prev) =>
-        prev.map((t) =>
-          t.id === toastId
-            ? { ...t, type: 'error' as const, message: `Failed: ${displayName}: ${err instanceof Error ? err.message : 'Unknown error'}`, progress: undefined }
-            : t
-        )
-      );
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== toastId));
-      }, 6000);
-    }
-  }, [selectedDevice, updateToastProgress, formatSize]);
-
-  const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !selectedDevice) return;
-
-    const isFolder = !!(files[0] as any).webkitRelativePath;
-
-    for (const file of Array.from(files)) {
-      let destPath = currentPath;
-      let displayName = file.name;
-      const relativePath = (file as any).webkitRelativePath as string;
-
-      if (isFolder && relativePath) {
-        const relativeDir = relativePath.substring(0, relativePath.lastIndexOf('/'));
-        destPath = `${currentPath}/${relativeDir}`.replace(/\/+/g, '/');
-        displayName = relativePath;
-      }
-
-      if (isFolder && destPath !== currentPath) {
         try {
-          await fileApi.createDirectory(selectedDevice.id, destPath);
-        } catch { /* directory may already exist */ }
+          await fileApi.pushLocal(selectedDevice.id, localPath, currentPath);
+          setToasts((prev) =>
+            prev.map((t) =>
+              t.id === toastId
+                ? { ...t, type: 'success' as const, message: `Pushed: ${name}` }
+                : t
+            )
+          );
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== toastId));
+          }, 4000);
+        } catch (err) {
+          setToasts((prev) =>
+            prev.map((t) =>
+              t.id === toastId
+                ? { ...t, type: 'error' as const, message: `Failed: ${name}: ${err instanceof Error ? err.message : 'Unknown error'}` }
+                : t
+            )
+          );
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== toastId));
+          }, 6000);
+        }
       }
+      refresh();
+    } else {
+      // Pull device files to local directory
+      const localDir = paths[0];
+      for (const remotePath of selectedFiles) {
+        const name = remotePath.split('/').pop() || remotePath;
+        const toastId = `pull-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setToasts((prev) => [
+          ...prev,
+          { id: toastId, type: 'info', message: `Pulling: ${name}...` },
+        ]);
 
-      await uploadSingleFile(file, destPath, displayName);
+        try {
+          const result = await fileApi.pullToLocal(selectedDevice.id, remotePath, localDir);
+          setToasts((prev) =>
+            prev.map((t) =>
+              t.id === toastId
+                ? { ...t, type: 'success' as const, message: `Saved: ${name} → ${result.path}` }
+                : t
+            )
+          );
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== toastId));
+          }, 4000);
+        } catch (err) {
+          setToasts((prev) =>
+            prev.map((t) =>
+              t.id === toastId
+                ? { ...t, type: 'error' as const, message: `Failed: ${name}: ${err instanceof Error ? err.message : 'Unknown error'}` }
+                : t
+            )
+          );
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== toastId));
+          }, 6000);
+        }
+      }
+      clearSelection();
     }
-
-    e.target.value = '';
-    refresh();
-  }, [selectedDevice, currentPath, uploadSingleFile, refresh]);
+  }, [selectedDevice, currentPath, pickerAction, selectedFiles, refresh, clearSelection]);
 
   const handleDownload = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;
-
-    for (const path of selectedFiles) {
-      const file = files.find((f) => f.path === path);
-      if (!file || file.type === 'directory') {
-        addToast('error', `Cannot download directory: ${file?.name || path}`);
-        continue;
-      }
-
-      try {
-        const blob = await fileApi.downloadFile(selectedDevice.id, path);
-        
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        addToast('success', `Downloaded: ${file.name}`);
-      } catch (err) {
-        addToast('error', `Failed to download ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
-    }
-    
-    clearSelection();
-  }, [selectedDevice, selectedFiles, files, addToast, clearSelection]);
+    setPickerMode('directory');
+    setPickerTitle('Choose Download Destination');
+    setPickerAction('download');
+    setPickerOpen(true);
+  }, [selectedDevice, selectedFiles]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;
@@ -242,98 +212,6 @@ function App() {
   const handleGoHome = useCallback(() => {
     navigateTo('/sdcard');
   }, [navigateTo]);
-
-  // --- Drag and drop ---
-  const readEntryAsFile = (entry: FileSystemFileEntry): Promise<File> =>
-    new Promise((resolve, reject) => entry.file(resolve, reject));
-
-  const readDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
-    new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-
-  const collectFiles = async (
-    entry: FileSystemEntry,
-    basePath: string,
-  ): Promise<{ file: File; relativePath: string }[]> => {
-    if (entry.isFile) {
-      const file = await readEntryAsFile(entry as FileSystemFileEntry);
-      return [{ file, relativePath: basePath ? `${basePath}/${entry.name}` : entry.name }];
-    }
-    const dirEntry = entry as FileSystemDirectoryEntry;
-    const reader = dirEntry.createReader();
-    const results: { file: File; relativePath: string }[] = [];
-    const subPath = basePath ? `${basePath}/${entry.name}` : entry.name;
-    let entries: FileSystemEntry[];
-    do {
-      entries = await readDirectoryEntries(reader);
-      for (const child of entries) {
-        results.push(...(await collectFiles(child, subPath)));
-      }
-    } while (entries.length > 0);
-    return results;
-  };
-
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current++;
-    if (e.dataTransfer.types.includes('Files')) {
-      setIsDragOver(true);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current--;
-    if (dragCounter.current === 0) {
-      setIsDragOver(false);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  }, []);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current = 0;
-    setIsDragOver(false);
-
-    if (!selectedDevice) return;
-
-    const items = e.dataTransfer.items;
-    const allFiles: { file: File; relativePath: string }[] = [];
-
-    // Use webkitGetAsEntry to support folders
-    const entries: FileSystemEntry[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const entry = items[i].webkitGetAsEntry?.();
-      if (entry) entries.push(entry);
-    }
-
-    for (const entry of entries) {
-      allFiles.push(...(await collectFiles(entry, '')));
-    }
-
-    // Upload all collected files
-    for (const { file, relativePath } of allFiles) {
-      const relativeDir = relativePath.includes('/')
-        ? relativePath.substring(0, relativePath.lastIndexOf('/'))
-        : '';
-      const destPath = relativeDir
-        ? `${currentPath}/${relativeDir}`.replace(/\/+/g, '/')
-        : currentPath;
-
-      if (relativeDir) {
-        try {
-          await fileApi.createDirectory(selectedDevice.id, destPath);
-        } catch { /* directory may already exist */ }
-      }
-
-      await uploadSingleFile(file, destPath, relativePath);
-    }
-
-    refresh();
-  }, [selectedDevice, currentPath, uploadSingleFile, refresh]);
 
   return (
     <div className={styles.app}>
@@ -359,19 +237,7 @@ function App() {
         </aside>
 
         {/* File browser */}
-        <main
-          className={`${styles.content} ${isDragOver ? styles.dropActive : ''}`}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          {isDragOver && (
-            <div className={styles.dropOverlay}>
-              <Upload size={48} />
-              <p>Drop files or folders to upload</p>
-            </div>
-          )}
+        <main className={styles.content}>
           {selectedDevice?.state === 'device' ? (
             <>
               <Toolbar
@@ -408,22 +274,13 @@ function App() {
         </main>
       </div>
 
-      {/* Hidden file inputs */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        style={{ display: 'none' }}
-        multiple
-        onChange={handleFileInputChange}
-      />
-      {/* Folder upload input */}
-      <input
-        type="file"
-        ref={folderInputRef}
-        style={{ display: 'none' }}
-        // @ts-expect-error webkitdirectory is non-standard but widely supported
-        webkitdirectory=""
-        onChange={handleFileInputChange}
+      {/* Local file picker for upload/download */}
+      <LocalFilePicker
+        isOpen={pickerOpen}
+        mode={pickerMode}
+        title={pickerTitle}
+        onSelect={handlePickerSelect}
+        onCancel={() => setPickerOpen(false)}
       />
 
       {/* Modals */}

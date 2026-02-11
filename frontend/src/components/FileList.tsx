@@ -1,4 +1,3 @@
-import React from 'react';
 import type { FileEntry } from '../types';
 import { 
   Folder, 

@@ -6,7 +6,8 @@ import type {
   Device, 
   FileListResponse, 
   OperationResult,
-  DeviceStorageInfo 
+  DeviceStorageInfo,
+  LocalListResponse,
 } from '../types';
 
 const API_BASE = '/api';
@@ -69,7 +70,7 @@ export const fileApi = {
   },
 
   /**
-   * Download a file from the device
+   * Download a file from the device (browser download via HTTP)
    */
   async downloadFile(deviceId: string, path: string): Promise<Blob> {
     const params = new URLSearchParams({ path });
@@ -92,53 +93,35 @@ export const fileApi = {
   },
 
   /**
-   * Upload a file to the device
+   * Push a local file/folder directly to the device (no HTTP file transfer)
    */
-  async uploadFile(
-    deviceId: string, 
-    file: File, 
-    destinationPath: string,
-    onProgress?: (loaded: number, total: number) => void
+  async pushLocal(
+    deviceId: string,
+    localPath: string,
+    remotePath: string,
   ): Promise<OperationResult> {
-    const formData = new FormData();
-    formData.append('file', file);
+    const params = new URLSearchParams({ local_path: localPath, remote_path: remotePath });
+    const response = await fetch(
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/push?${params}`,
+      { method: 'POST' }
+    );
+    return handleResponse<OperationResult>(response);
+  },
 
-    const params = new URLSearchParams({ path: destinationPath });
-    const url = `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/upload?${params}`;
-
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', url);
-
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(e.loaded, e.total);
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(data as OperationResult);
-          } else {
-            reject(new ApiError(xhr.status, data.detail || data.message || `HTTP ${xhr.status}`));
-          }
-        } catch {
-          reject(new ApiError(xhr.status, `HTTP ${xhr.status}`));
-        }
-      });
-
-      xhr.addEventListener('error', () => {
-        reject(new ApiError(0, 'Network error during upload'));
-      });
-
-      xhr.addEventListener('abort', () => {
-        reject(new ApiError(0, 'Upload aborted'));
-      });
-
-      xhr.send(formData);
-    });
+  /**
+   * Pull a device file directly to a local directory (no HTTP file transfer)
+   */
+  async pullToLocal(
+    deviceId: string,
+    remotePath: string,
+    localDir: string,
+  ): Promise<OperationResult> {
+    const params = new URLSearchParams({ remote_path: remotePath, local_dir: localDir });
+    const response = await fetch(
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/pull?${params}`,
+      { method: 'POST' }
+    );
+    return handleResponse<OperationResult>(response);
   },
 
   /**
@@ -192,5 +175,27 @@ export const fileApi = {
       }
     );
     return handleResponse<OperationResult>(response);
+  },
+};
+
+/**
+ * Local filesystem API calls (for direct push/pull without HTTP file transfer)
+ */
+export const localApi = {
+  /**
+   * List available drives (Windows)
+   */
+  async getDrives(): Promise<string[]> {
+    const response = await fetch(`${API_BASE}/local/drives`);
+    return handleResponse<string[]>(response);
+  },
+
+  /**
+   * List contents of a local directory
+   */
+  async listDirectory(path: string): Promise<LocalListResponse> {
+    const params = new URLSearchParams({ path });
+    const response = await fetch(`${API_BASE}/local/list?${params}`);
+    return handleResponse<LocalListResponse>(response);
   },
 };

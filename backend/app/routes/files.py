@@ -2,10 +2,7 @@
 File operations routes.
 """
 import os
-import tempfile
-import uuid
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from ..adb import adb, ADBError
 from ..models import (
@@ -17,10 +14,6 @@ from ..models import (
 )
 
 router = APIRouter(prefix="/devices/{device_id}/files", tags=["files"])
-
-# Temporary directory for file transfers
-TEMP_DIR = os.path.join(tempfile.gettempdir(), "adb-fx")
-os.makedirs(TEMP_DIR, exist_ok=True)
 
 
 @router.get("", response_model=FileListResponse)
@@ -69,41 +62,55 @@ async def download_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/upload", response_model=OperationResult)
-async def upload_file(
+@router.post("/push", response_model=OperationResult)
+async def push_local(
     device_id: str,
-    file: UploadFile = File(...),
-    path: str = Query(..., description="Destination directory on device")
+    local_path: str = Query(..., description="Local file or directory path"),
+    remote_path: str = Query(..., description="Destination path on device"),
 ):
-    """Upload a file to the device."""
+    """Push a local file or directory directly to the device (no HTTP transfer)."""
     try:
-        # Save uploaded file to temp location
-        temp_path = os.path.join(TEMP_DIR, f"{uuid.uuid4()}_{file.filename}")
-        
-        with open(temp_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        
-        try:
-            # Determine destination path
-            if await adb.is_directory(device_id, path):
-                remote_path = f"{path.rstrip('/')}/{file.filename}"
-            else:
-                remote_path = path
-            
-            # Push file to device
-            await adb.push_file(device_id, temp_path, remote_path)
-            
-            return OperationResult(
-                success=True,
-                message=f"File uploaded successfully",
-                path=remote_path
-            )
-        finally:
-            # Clean up temp file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-                
+        if not os.path.exists(local_path):
+            raise HTTPException(status_code=404, detail=f"Local path not found: {local_path}")
+
+        # If pushing a file into a directory, append the filename
+        if os.path.isfile(local_path):
+            try:
+                is_dir = await adb.is_directory(device_id, remote_path)
+            except ADBError:
+                is_dir = False
+            if is_dir:
+                remote_path = f"{remote_path.rstrip('/')}/{os.path.basename(local_path)}"
+
+        await adb.push_file(device_id, local_path, remote_path)
+        return OperationResult(
+            success=True,
+            message="Pushed successfully",
+            path=remote_path,
+        )
+    except ADBError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/pull", response_model=OperationResult)
+async def pull_to_local(
+    device_id: str,
+    remote_path: str = Query(..., description="Path on device to pull"),
+    local_dir: str = Query(..., description="Local destination directory"),
+):
+    """Pull a file from device directly to a local directory (no HTTP transfer)."""
+    try:
+        if not os.path.isdir(local_dir):
+            raise HTTPException(status_code=404, detail=f"Local directory not found: {local_dir}")
+
+        filename = os.path.basename(remote_path)
+        local_dest = os.path.join(local_dir, filename)
+        await adb.pull_file(device_id, remote_path, local_dest)
+        return OperationResult(
+            success=True,
+            message=f"Pulled to {local_dest}",
+            path=local_dest,
+        )
     except ADBError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

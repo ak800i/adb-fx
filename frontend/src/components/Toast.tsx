@@ -1,4 +1,3 @@
-import React from 'react';
 import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 import styles from './Toast.module.css';
 

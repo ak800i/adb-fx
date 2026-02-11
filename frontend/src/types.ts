@@ -44,3 +44,17 @@ export interface DeviceStorageInfo {
   available: number;
   mount_point: string;
 }
+
+// Local filesystem types
+export interface LocalEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size?: number | null;
+}
+
+export interface LocalListResponse {
+  path: string;
+  parent: string | null;
+  entries: LocalEntry[];
+}

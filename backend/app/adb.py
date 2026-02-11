@@ -91,7 +91,11 @@ class ADBWrapper:
         
         cmd.extend(args)
         
-        logger.debug("CMD: %s", " ".join(cmd))
+        # Suppress noisy device-polling commands
+        quiet = args[:2] == ("devices", "-l")
+        
+        if not quiet:
+            logger.debug("CMD: %s", " ".join(cmd))
         
         try:
             result = await asyncio.to_thread(
@@ -104,11 +108,12 @@ class ADBWrapper:
             stdout = result.stdout.decode("utf-8", errors="replace")
             stderr = result.stderr.decode("utf-8", errors="replace")
             
-            logger.debug("EXIT: %d", result.returncode)
-            if stdout.strip():
-                logger.debug("STDOUT: %s", stdout.strip())
-            if stderr.strip():
-                logger.debug("STDERR: %s", stderr.strip())
+            if not quiet:
+                logger.debug("EXIT: %d", result.returncode)
+                if stdout.strip():
+                    logger.debug("STDOUT: %s", stdout.strip())
+                if stderr.strip():
+                    logger.debug("STDERR: %s", stderr.strip())
             
             return (stdout, stderr, result.returncode)
         except subprocess.TimeoutExpired:
