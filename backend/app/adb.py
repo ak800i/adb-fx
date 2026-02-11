@@ -8,8 +8,9 @@ import re
 import os
 import logging
 import shutil
+import threading
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from datetime import datetime
 
 logger = logging.getLogger("adb")
@@ -40,6 +41,8 @@ class ADBWrapper:
             adb_path: Path to ADB executable. If None, uses 'adb' from PATH.
         """
         self.adb_path = adb_path or self._find_adb()
+        self._active_transfers: Dict[str, subprocess.Popen] = {}
+        self._transfers_lock = threading.Lock()
     
     def _find_adb(self) -> str:
         """Find ADB executable in system PATH."""
@@ -125,6 +128,78 @@ class ADBWrapper:
                 " ".join(cmd)
             )
     
+    async def _run_cancellable(
+        self,
+        *args: str,
+        device_id: Optional[str] = None,
+        transfer_id: Optional[str] = None,
+        timeout: int = 300,
+    ) -> Tuple[str, str, int]:
+        """
+        Run an ADB command that can be cancelled via transfer_id.
+        Uses Popen so the process handle can be killed.
+        """
+        cmd = [self.adb_path]
+        if device_id:
+            cmd.extend(["-s", device_id])
+        cmd.extend(args)
+
+        logger.debug("CMD: %s", " ".join(cmd))
+
+        def _run() -> Tuple[str, str, int]:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if transfer_id:
+                with self._transfers_lock:
+                    self._active_transfers[transfer_id] = proc
+            try:
+                stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                raise
+            finally:
+                if transfer_id:
+                    with self._transfers_lock:
+                        self._active_transfers.pop(transfer_id, None)
+            return (
+                stdout_bytes.decode("utf-8", errors="replace"),
+                stderr_bytes.decode("utf-8", errors="replace"),
+                proc.returncode,
+            )
+
+        try:
+            stdout, stderr, code = await asyncio.to_thread(_run)
+            logger.debug("EXIT: %d", code)
+            if stdout.strip():
+                logger.debug("STDOUT: %s", stdout.strip())
+            if stderr.strip():
+                logger.debug("STDERR: %s", stderr.strip())
+            return (stdout, stderr, code)
+        except subprocess.TimeoutExpired:
+            logger.error("TIMEOUT: %s (after %ds)", " ".join(cmd), timeout)
+            raise ADBError(f"Command timed out after {timeout}s", " ".join(cmd))
+        except FileNotFoundError:
+            raise ADBError(
+                "ADB executable not found. Please install Android SDK Platform Tools.",
+                " ".join(cmd)
+            )
+
+    def cancel_transfer(self, transfer_id: str) -> bool:
+        """Cancel a running transfer by killing its subprocess."""
+        with self._transfers_lock:
+            proc = self._active_transfers.pop(transfer_id, None)
+        if proc:
+            try:
+                proc.kill()
+                logger.info("Cancelled transfer: %s", transfer_id)
+                return True
+            except OSError:
+                pass
+        return False
     def _run_command_sync(
         self, 
         *args: str, 
@@ -356,7 +431,8 @@ class ADBWrapper:
         self, 
         device_id: str, 
         remote_path: str, 
-        local_path: str
+        local_path: str,
+        transfer_id: Optional[str] = None,
     ) -> bool:
         """
         Download a file from the device.
@@ -365,6 +441,7 @@ class ADBWrapper:
             device_id: Target device ID
             remote_path: Path on device
             local_path: Local destination path
+            transfer_id: Optional ID for cancellation
             
         Returns:
             True if successful
@@ -372,13 +449,17 @@ class ADBWrapper:
         # Ensure local directory exists
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         
-        stdout, stderr, code = await self._run_command(
+        stdout, stderr, code = await self._run_cancellable(
             "pull", remote_path, local_path,
             device_id=device_id,
-            timeout=300  # 5 minutes for large files
+            transfer_id=transfer_id,
+            timeout=300,
         )
         
         if code != 0:
+            # Check if killed by cancel
+            if code < 0 or 'killed' in (stderr or '').lower():
+                raise ADBError("Transfer cancelled")
             raise ADBError(f"Failed to pull file: {stderr or stdout}")
         
         return True
@@ -387,7 +468,8 @@ class ADBWrapper:
         self, 
         device_id: str, 
         local_path: str, 
-        remote_path: str
+        remote_path: str,
+        transfer_id: Optional[str] = None,
     ) -> bool:
         """
         Upload a file to the device.
@@ -396,6 +478,7 @@ class ADBWrapper:
             device_id: Target device ID
             local_path: Local file path
             remote_path: Destination path on device
+            transfer_id: Optional ID for cancellation
             
         Returns:
             True if successful
@@ -403,13 +486,16 @@ class ADBWrapper:
         if not os.path.exists(local_path):
             raise ADBError(f"Local file not found: {local_path}")
         
-        stdout, stderr, code = await self._run_command(
+        stdout, stderr, code = await self._run_cancellable(
             "push", local_path, remote_path,
             device_id=device_id,
-            timeout=300  # 5 minutes for large files
+            transfer_id=transfer_id,
+            timeout=300,
         )
         
         if code != 0:
+            if code < 0 or 'killed' in (stderr or '').lower():
+                raise ADBError("Transfer cancelled")
             raise ADBError(f"Failed to push file: {stderr or stdout}")
         
         return True

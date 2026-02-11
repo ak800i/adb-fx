@@ -88,3 +88,15 @@
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.1);
 }
+
+.cancelBtn {
+  padding: 4px;
+  background: transparent;
+  color: var(--danger);
+  opacity: 0.7;
+}
+
+.cancelBtn:hover {
+  opacity: 1;
+  background: rgba(231, 76, 60, 0.15);
+}

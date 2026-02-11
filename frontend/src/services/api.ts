@@ -76,8 +76,10 @@ export const fileApi = {
     deviceId: string,
     localPath: string,
     remotePath: string,
+    transferId?: string,
   ): Promise<OperationResult> {
     const params = new URLSearchParams({ local_path: localPath, remote_path: remotePath });
+    if (transferId) params.set('transfer_id', transferId);
     const response = await fetch(
       `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/push?${params}`,
       { method: 'POST' }
@@ -92,13 +94,26 @@ export const fileApi = {
     deviceId: string,
     remotePath: string,
     localDir: string,
+    transferId?: string,
   ): Promise<OperationResult> {
     const params = new URLSearchParams({ remote_path: remotePath, local_dir: localDir });
+    if (transferId) params.set('transfer_id', transferId);
     const response = await fetch(
       `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/pull?${params}`,
       { method: 'POST' }
     );
     return handleResponse<OperationResult>(response);
+  },
+
+  /**
+   * Cancel an in-progress transfer
+   */
+  async cancelTransfer(deviceId: string, transferId: string): Promise<void> {
+    const params = new URLSearchParams({ transfer_id: transferId });
+    await fetch(
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/cancel?${params}`,
+      { method: 'POST' }
+    );
   },
 
   /**

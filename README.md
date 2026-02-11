@@ -31,6 +31,7 @@ The only prerequisites are:
 - **Upload**: Local file picker browses the Windows filesystem (drives, folders, files) → backend pushes directly to device
 - **Download**: Select device files → local folder picker → backend pulls directly to that folder
 - **New folder**, **Delete** (with confirmation), **Rename**
+- **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button on the toast notification
 - **URL hash persistence**: Current path stored in `#/sdcard/...` — survives page refresh, supports back/forward
 
 ## Design
@@ -87,6 +88,7 @@ adb-fx/
 | POST | `/api/devices/{id}/files/mkdir` | Create directory on device |
 | DELETE | `/api/devices/{id}/files` | Delete file or folder |
 | POST | `/api/devices/{id}/files/rename` | Rename/move file or folder |
+| POST | `/api/devices/{id}/files/cancel` | Cancel an in-progress transfer |
 | GET | `/api/local/drives` | List Windows drive letters |
 | GET | `/api/local/list` | Browse local directory contents |
 

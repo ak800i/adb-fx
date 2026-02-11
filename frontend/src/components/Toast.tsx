@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, X, StopCircle } from 'lucide-react';
 import styles from './Toast.module.css';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -8,6 +8,7 @@ export interface ToastMessage {
   type: ToastType;
   message: string;
   progress?: number; // 0-100, undefined means no progress bar
+  onCancel?: () => void; // if set, show a cancel button
 }
 
 interface ToastProps {
@@ -37,6 +38,15 @@ export function Toast({ toasts, onDismiss }: ToastProps) {
               </div>
             )}
           </div>
+          {toast.onCancel && (
+            <button
+              className={styles.cancelBtn}
+              onClick={toast.onCancel}
+              title="Cancel transfer"
+            >
+              <StopCircle size={16} />
+            </button>
+          )}
           <button 
             className={styles.dismissBtn}
             onClick={() => onDismiss(toast.id)}

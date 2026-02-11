@@ -108,22 +108,39 @@ function App() {
     setPickerOpen(false);
     if (!selectedDevice || paths.length === 0) return;
 
+    const cancelTransfer = (deviceId: string, transferId: string, toastId: string) => {
+      fileApi.cancelTransfer(deviceId, transferId).catch(() => {});
+      setToasts((prev) =>
+        prev.map((t) =>
+          t.id === toastId
+            ? { ...t, type: 'info' as const, message: `Cancelling...`, onCancel: undefined }
+            : t
+        )
+      );
+    };
+
     if (pickerAction === 'upload') {
       // Push local files/folders directly to device
       for (const localPath of paths) {
         const name = localPath.replace(/\\/g, '/').split('/').pop() || localPath;
         const toastId = `push-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         setToasts((prev) => [
           ...prev,
-          { id: toastId, type: 'info', message: `Pushing: ${name}...` },
+          {
+            id: toastId,
+            type: 'info',
+            message: `Pushing: ${name}...`,
+            onCancel: () => cancelTransfer(selectedDevice.id, transferId, toastId),
+          },
         ]);
 
         try {
-          await fileApi.pushLocal(selectedDevice.id, localPath, currentPath);
+          await fileApi.pushLocal(selectedDevice.id, localPath, currentPath, transferId);
           setToasts((prev) =>
             prev.map((t) =>
               t.id === toastId
-                ? { ...t, type: 'success' as const, message: `Pushed: ${name}` }
+                ? { ...t, type: 'success' as const, message: `Pushed: ${name}`, onCancel: undefined }
                 : t
             )
           );
@@ -131,16 +148,23 @@ function App() {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
           }, 4000);
         } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          const cancelled = msg.toLowerCase().includes('cancel');
           setToasts((prev) =>
             prev.map((t) =>
               t.id === toastId
-                ? { ...t, type: 'error' as const, message: `Failed: ${name}: ${err instanceof Error ? err.message : 'Unknown error'}` }
+                ? {
+                    ...t,
+                    type: cancelled ? ('info' as const) : ('error' as const),
+                    message: cancelled ? `Cancelled: ${name}` : `Failed: ${name}: ${msg}`,
+                    onCancel: undefined,
+                  }
                 : t
             )
           );
           setTimeout(() => {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
-          }, 6000);
+          }, cancelled ? 3000 : 6000);
         }
       }
       refresh();
@@ -150,17 +174,23 @@ function App() {
       for (const remotePath of selectedFiles) {
         const name = remotePath.split('/').pop() || remotePath;
         const toastId = `pull-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         setToasts((prev) => [
           ...prev,
-          { id: toastId, type: 'info', message: `Pulling: ${name}...` },
+          {
+            id: toastId,
+            type: 'info',
+            message: `Pulling: ${name}...`,
+            onCancel: () => cancelTransfer(selectedDevice.id, transferId, toastId),
+          },
         ]);
 
         try {
-          const result = await fileApi.pullToLocal(selectedDevice.id, remotePath, localDir);
+          const result = await fileApi.pullToLocal(selectedDevice.id, remotePath, localDir, transferId);
           setToasts((prev) =>
             prev.map((t) =>
               t.id === toastId
-                ? { ...t, type: 'success' as const, message: `Saved: ${name} → ${result.path}` }
+                ? { ...t, type: 'success' as const, message: `Saved: ${name} → ${result.path}`, onCancel: undefined }
                 : t
             )
           );
@@ -168,16 +198,23 @@ function App() {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
           }, 4000);
         } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          const cancelled = msg.toLowerCase().includes('cancel');
           setToasts((prev) =>
             prev.map((t) =>
               t.id === toastId
-                ? { ...t, type: 'error' as const, message: `Failed: ${name}: ${err instanceof Error ? err.message : 'Unknown error'}` }
+                ? {
+                    ...t,
+                    type: cancelled ? ('info' as const) : ('error' as const),
+                    message: cancelled ? `Cancelled: ${name}` : `Failed: ${name}: ${msg}`,
+                    onCancel: undefined,
+                  }
                 : t
             )
           );
           setTimeout(() => {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
-          }, 6000);
+          }, cancelled ? 3000 : 6000);
         }
       }
       clearSelection();

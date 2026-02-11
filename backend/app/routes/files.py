@@ -34,6 +34,7 @@ async def push_local(
     device_id: str,
     local_path: str = Query(..., description="Local file or directory path"),
     remote_path: str = Query(..., description="Destination path on device"),
+    transfer_id: Optional[str] = Query(None, description="Transfer ID for cancellation"),
 ):
     """Push a local file or directory directly to the device (no HTTP transfer)."""
     try:
@@ -49,7 +50,7 @@ async def push_local(
             if is_dir:
                 remote_path = f"{remote_path.rstrip('/')}/{os.path.basename(local_path)}"
 
-        await adb.push_file(device_id, local_path, remote_path)
+        await adb.push_file(device_id, local_path, remote_path, transfer_id=transfer_id)
         return OperationResult(
             success=True,
             message="Pushed successfully",
@@ -64,6 +65,7 @@ async def pull_to_local(
     device_id: str,
     remote_path: str = Query(..., description="Path on device to pull"),
     local_dir: str = Query(..., description="Local destination directory"),
+    transfer_id: Optional[str] = Query(None, description="Transfer ID for cancellation"),
 ):
     """Pull a file from device directly to a local directory (no HTTP transfer)."""
     try:
@@ -72,7 +74,7 @@ async def pull_to_local(
 
         filename = os.path.basename(remote_path)
         local_dest = os.path.join(local_dir, filename)
-        await adb.pull_file(device_id, remote_path, local_dest)
+        await adb.pull_file(device_id, remote_path, local_dest, transfer_id=transfer_id)
         return OperationResult(
             success=True,
             message=f"Pulled to {local_dest}",
@@ -80,6 +82,16 @@ async def pull_to_local(
         )
     except ADBError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/cancel")
+async def cancel_transfer(
+    device_id: str,
+    transfer_id: str = Query(..., description="Transfer ID to cancel"),
+):
+    """Cancel an in-progress transfer."""
+    cancelled = adb.cancel_transfer(transfer_id)
+    return {"cancelled": cancelled, "transfer_id": transfer_id}
 
 
 @router.post("/mkdir", response_model=OperationResult)
