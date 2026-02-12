@@ -22,7 +22,7 @@ git clone → start.bat → done
 
 The only prerequisites are:
 
-- **Python 3.10+**
+- **Python 3.12+**
 - **Node.js 18+**
 - **USB Debugging** enabled on your Android device
 
