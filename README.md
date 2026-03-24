@@ -1,6 +1,7 @@
 # ADB File Explorer (adb-fx)
 
 A local-first desktop web app for managing files on Android devices via ADB.
+Up to 28x faster than Windows' MTP file transfer protocol (your storage's write speed is the limit).
 
 <img width="1422" height="992" alt="image" src="https://github.com/user-attachments/assets/9d75b27e-93b2-4515-9e4f-d6e12d6e3ea4" />
 
@@ -22,7 +23,7 @@ git clone → start.bat → done
 
 The only prerequisites are:
 
-- **Python 3.10+**
+- **Python 3.12+**
 - **Node.js 18+**
 - **USB Debugging** enabled on your Android device
 
