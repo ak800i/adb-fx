@@ -21,17 +21,19 @@
 
 .list {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .row {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 0 12px;
+  height: 40px;
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   transition: background 0.15s ease;
   user-select: none;
+  box-sizing: border-box;
 }
 
 .row:hover {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { FileEntry, FileListResponse } from '../types';
+import type { FileEntry } from '../types';
 import { fileApi } from '../services/api';
 
 const DEFAULT_PATH = '/storage';
@@ -22,12 +22,15 @@ function setHashPath(path: string) {
   }
 }
 
+const PAGE_LIMIT = 1000;
+
 /**
  * Hook for managing file browser state and operations
  */
 export function useFileBrowser(deviceId: string | null) {
   const [currentPath, setCurrentPath] = useState(getPathFromHash);
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [totalFiles, setTotalFiles] = useState(0);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +46,26 @@ export function useFileBrowser(deviceId: string | null) {
       setError(null);
       setSelectedFiles(new Set());
       
-      const response: FileListResponse = await fileApi.listFiles(deviceId, path);
-      setCurrentPath(response.path);
-      setHashPath(response.path);
-      setFiles(response.entries);
-      setParentPath(response.parent);
+      // Fetch first page
+      const first = await fileApi.listFiles(deviceId, path, 0, PAGE_LIMIT);
+      setCurrentPath(first.path);
+      setHashPath(first.path);
+      setParentPath(first.parent);
+      setTotalFiles(first.total);
+
+      let allEntries = first.entries;
+
+      // Fetch remaining pages if needed
+      if (first.has_more) {
+        let offset = PAGE_LIMIT;
+        while (offset < first.total) {
+          const page = await fileApi.listFiles(deviceId, path, offset, PAGE_LIMIT);
+          allEntries = allEntries.concat(page.entries);
+          offset += PAGE_LIMIT;
+        }
+      }
+
+      setFiles(allEntries);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to list files');
     } finally {
@@ -101,6 +119,7 @@ export function useFileBrowser(deviceId: string | null) {
   return {
     currentPath,
     files,
+    totalFiles,
     parentPath,
     loading,
     error,

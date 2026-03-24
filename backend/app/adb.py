@@ -405,7 +405,9 @@ class ADBWrapper:
     async def list_files(
         self, 
         device_id: str, 
-        path: str = "/storage"
+        path: str = "/storage",
+        offset: int = 0,
+        limit: int = 1000,
     ) -> FileListResponse:
         """
         List files and directories at the given path.
@@ -413,6 +415,8 @@ class ADBWrapper:
         Args:
             device_id: Target device ID
             path: Directory path on device
+            offset: Pagination offset (0-based)
+            limit: Maximum number of entries to return
             
         Returns:
             FileListResponse with list of entries
@@ -425,7 +429,7 @@ class ADBWrapper:
         stdout, stderr, code = await self._run_command(
             "shell", f"ls -la '{escaped}'",
             device_id=device_id,
-            timeout=10
+            timeout=60
         )
         
         if code != 0 or "No such file or directory" in stderr or "No such file or directory" in stdout:
@@ -445,6 +449,9 @@ class ADBWrapper:
         # Sort: directories first, then files, alphabetically
         entries.sort(key=lambda e: (e.type != FileType.DIRECTORY, e.name.lower()))
         
+        total = len(entries)
+        page = entries[offset:offset + limit]
+        
         # Determine parent directory
         parent = None
         if path != "/":
@@ -452,8 +459,11 @@ class ADBWrapper:
         
         return FileListResponse(
             path=path,
-            entries=entries,
-            parent=parent
+            entries=page,
+            parent=parent,
+            total=total,
+            offset=offset,
+            has_more=(offset + limit) < total,
         )
     
     def _parse_ls_line(self, line: str, base_path: str) -> Optional[FileEntry]:

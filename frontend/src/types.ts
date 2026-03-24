@@ -30,6 +30,9 @@ export interface FileListResponse {
   path: string;
   entries: FileEntry[];
   parent: string | null;
+  total: number;
+  offset: number;
+  has_more: boolean;
 }
 
 export interface OperationResult {

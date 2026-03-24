@@ -19,11 +19,13 @@ router = APIRouter(prefix="/devices/{device_id}/files", tags=["files"])
 @router.get("", response_model=FileListResponse)
 async def list_files(
     device_id: str,
-    path: str = Query("/storage", description="Directory path to list")
+    path: str = Query("/storage", description="Directory path to list"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    limit: int = Query(1000, ge=1, le=10000, description="Max entries to return"),
 ):
     """List files and directories at the given path."""
     try:
-        result = await adb.list_files(device_id, path)
+        result = await adb.list_files(device_id, path, offset=offset, limit=limit)
         return result
     except ADBError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -1,3 +1,5 @@
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { List, type RowComponentProps } from 'react-window';
 import type { FileEntry } from '../types';
 import { 
   Folder, 
@@ -12,6 +14,8 @@ import {
   FileQuestion
 } from 'lucide-react';
 import styles from './FileList.module.css';
+
+const ROW_HEIGHT = 40;
 
 interface FileListProps {
   files: FileEntry[];
@@ -98,6 +102,64 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
+interface RowData {
+  files: FileEntry[];
+  selectedFiles: Set<string>;
+  onFileClick: (file: FileEntry) => void;
+  onFileDoubleClick: (file: FileEntry) => void;
+  onToggleSelect: (path: string) => void;
+}
+
+type FileRowProps = RowComponentProps<RowData>;
+
+function Row({ index, style, files, selectedFiles, onFileClick, onFileDoubleClick, onToggleSelect }: FileRowProps) {
+  const file = files[index];
+
+  return (
+    <div
+      style={style}
+      className={`${styles.row} ${
+        selectedFiles.has(file.path) ? styles.selected : ''
+      }`}
+      onClick={(e) => {
+        if (e.ctrlKey || e.metaKey) {
+          onToggleSelect(file.path);
+        } else {
+          onFileClick(file);
+        }
+      }}
+      onDoubleClick={() => onFileDoubleClick(file)}
+    >
+      <span className={styles.colCheck}>
+        <input
+          type="checkbox"
+          checked={selectedFiles.has(file.path)}
+          onChange={() => onToggleSelect(file.path)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </span>
+      <span className={styles.colName}>
+        {getFileIcon(file)}
+        <span className={styles.fileName}>
+          {file.name}
+          {file.link_target && (
+            <span className={styles.linkTarget}> → {file.link_target}</span>
+          )}
+        </span>
+      </span>
+      <span className={styles.colSize}>
+        {file.type === 'file' ? formatSize(file.size) : '-'}
+      </span>
+      <span className={styles.colDate}>
+        {formatDate(file.modified)}
+      </span>
+      <span className={styles.colPerms}>
+        {file.permissions || '-'}
+      </span>
+    </div>
+  );
+}
+
 export function FileList({
   files,
   selectedFiles,
@@ -106,6 +168,25 @@ export function FileList({
   onToggleSelect,
   loading,
 }: FileListProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [listHeight, setListHeight] = useState(400);
+
+  const updateHeight = useCallback(() => {
+    if (containerRef.current) {
+      const headerEl = containerRef.current.querySelector(`.${styles.header}`);
+      const headerH = headerEl ? headerEl.getBoundingClientRect().height : 0;
+      const containerH = containerRef.current.getBoundingClientRect().height;
+      setListHeight(Math.max(containerH - headerH, 100));
+    }
+  }, []);
+
+  useEffect(() => {
+    updateHeight();
+    const ro = new ResizeObserver(updateHeight);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [updateHeight]);
+
   if (loading) {
     return (
       <div className={styles.loading}>
@@ -124,8 +205,16 @@ export function FileList({
     );
   }
 
+  const rowProps: RowData = {
+    files,
+    selectedFiles,
+    onFileClick,
+    onFileDoubleClick,
+    onToggleSelect,
+  };
+
   return (
-    <div className={styles.container}>
+    <div className={styles.container} ref={containerRef}>
       <div className={styles.header}>
         <span className={styles.colCheck}></span>
         <span className={styles.colName}>Name</span>
@@ -134,51 +223,14 @@ export function FileList({
         <span className={styles.colPerms}>Permissions</span>
       </div>
       
-      <div className={styles.list}>
-        {files.map((file) => (
-          <div
-            key={file.path}
-            className={`${styles.row} ${
-              selectedFiles.has(file.path) ? styles.selected : ''
-            }`}
-            onClick={(e) => {
-              if (e.ctrlKey || e.metaKey) {
-                onToggleSelect(file.path);
-              } else {
-                onFileClick(file);
-              }
-            }}
-            onDoubleClick={() => onFileDoubleClick(file)}
-          >
-            <span className={styles.colCheck}>
-              <input
-                type="checkbox"
-                checked={selectedFiles.has(file.path)}
-                onChange={() => onToggleSelect(file.path)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </span>
-            <span className={styles.colName}>
-              {getFileIcon(file)}
-              <span className={styles.fileName}>
-                {file.name}
-                {file.link_target && (
-                  <span className={styles.linkTarget}> → {file.link_target}</span>
-                )}
-              </span>
-            </span>
-            <span className={styles.colSize}>
-              {file.type === 'file' ? formatSize(file.size) : '-'}
-            </span>
-            <span className={styles.colDate}>
-              {formatDate(file.modified)}
-            </span>
-            <span className={styles.colPerms}>
-              {file.permissions || '-'}
-            </span>
-          </div>
-        ))}
-      </div>
+      <List
+        rowCount={files.length}
+        rowHeight={ROW_HEIGHT}
+        rowComponent={Row}
+        rowProps={rowProps}
+        overscanCount={20}
+        style={{ height: listHeight }}
+      />
     </div>
   );
 }

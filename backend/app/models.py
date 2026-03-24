@@ -49,6 +49,9 @@ class FileListResponse(BaseModel):
     path: str = Field(..., description="Current directory path")
     entries: List[FileEntry] = Field(default_factory=list, description="List of files and directories")
     parent: Optional[str] = Field(None, description="Parent directory path")
+    total: int = Field(0, description="Total number of entries in the directory")
+    offset: int = Field(0, description="Offset of the first returned entry")
+    has_more: bool = Field(False, description="Whether more entries exist beyond this page")
 
 
 class TransferProgress(BaseModel):

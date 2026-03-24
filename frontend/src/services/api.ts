@@ -109,8 +109,8 @@ export const fileApi = {
   /**
    * List files in a directory
    */
-  async listFiles(deviceId: string, path: string = '/storage'): Promise<FileListResponse> {
-    const params = new URLSearchParams({ path });
+  async listFiles(deviceId: string, path: string = '/storage', offset = 0, limit = 1000): Promise<FileListResponse> {
+    const params = new URLSearchParams({ path, offset: String(offset), limit: String(limit) });
     const response = await fetch(
       `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files?${params}`
     );
