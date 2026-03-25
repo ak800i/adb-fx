@@ -46,6 +46,7 @@ function App() {
     toggleSelection,
     selectRange,
     clearSelection,
+    selectAll,
   } = useFileBrowser(selectedDevice?.id ?? null);
 
   // Modals state
@@ -375,6 +376,8 @@ function App() {
                 onFileDoubleClick={handleFileDoubleClick}
                 onToggleSelect={toggleSelection}
                 onSelectRange={selectRange}
+                onSelectAll={selectAll}
+                onClearSelection={clearSelection}
                 loading={filesLoading}
               />
               {/* Transfer queue (inline panel below file list) */}

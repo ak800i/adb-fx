@@ -24,6 +24,8 @@ interface FileListProps {
   onFileDoubleClick: (file: FileEntry) => void;
   onToggleSelect: (path: string) => void;
   onSelectRange: (fromIndex: number, toIndex: number) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
   loading: boolean;
 }
 
@@ -164,6 +166,8 @@ export function FileList({
   onFileDoubleClick,
   onToggleSelect,
   onSelectRange,
+  onSelectAll,
+  onClearSelection,
   loading,
 }: FileListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -231,7 +235,14 @@ export function FileList({
   return (
     <div className={styles.container} ref={containerRef}>
       <div className={styles.header}>
-        <span className={styles.colCheck}></span>
+        <span className={styles.colCheck}>
+          <input
+            type="checkbox"
+            checked={files.length > 0 && selectedFiles.size === files.length}
+            ref={(el) => { if (el) el.indeterminate = selectedFiles.size > 0 && selectedFiles.size < files.length; }}
+            onChange={() => selectedFiles.size === files.length ? onClearSelection() : onSelectAll()}
+          />
+        </span>
         <span className={styles.colName}>Name</span>
         <span className={styles.colSize}>Size</span>
         <span className={styles.colDate}>Modified</span>
