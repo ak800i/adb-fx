@@ -251,4 +251,16 @@ export const localApi = {
     const response = await fetch(`${API_BASE}/local/list?${params}`);
     return handleResponse<LocalListResponse>(response);
   },
+
+  /**
+   * Open native OS folder picker dialog
+   */
+  async pickFolder(initialDir?: string, title?: string): Promise<string | null> {
+    const params = new URLSearchParams();
+    if (initialDir) params.set('initial_dir', initialDir);
+    if (title) params.set('title', title);
+    const response = await fetch(`${API_BASE}/local/pick-folder?${params}`);
+    const data = await response.json();
+    return data.path ?? null;
+  },
 };

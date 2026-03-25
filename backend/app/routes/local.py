@@ -3,6 +3,7 @@ Routes for browsing the local filesystem.
 Allows the frontend to navigate local files/folders so the backend
 can push/pull directly without an intermediate HTTP file transfer.
 """
+import asyncio
 import os
 import string
 from pathlib import Path
@@ -68,3 +69,31 @@ async def list_local(path: str = Query(..., description="Local directory path"))
         parent_path = None
 
     return LocalListResponse(path=path, parent=parent_path, entries=entries)
+
+
+def _open_folder_dialog(initial_dir: str, title: str) -> Optional[str]:
+    """Open a native OS folder picker dialog. Must run on the main thread."""
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    folder = filedialog.askdirectory(
+        initialdir=initial_dir if os.path.isdir(initial_dir) else None,
+        title=title,
+    )
+    root.destroy()
+    return folder or None
+
+
+@router.get("/pick-folder")
+async def pick_folder(
+    initial_dir: str = Query("", description="Starting directory"),
+    title: str = Query("Select Folder", description="Dialog title"),
+):
+    """Open a native OS folder selection dialog and return the chosen path."""
+    selected = await asyncio.to_thread(_open_folder_dialog, initial_dir, title)
+    if not selected:
+        return {"path": None}
+    return {"path": os.path.normpath(selected)}

@@ -77,13 +77,11 @@ export function LocalFilePicker({
       // In directory mode, clicking a folder toggles its selection
       if (entry.type === 'directory') {
         setSelected((prev) => {
-          const next = new Set(prev);
-          if (next.has(entry.path)) {
-            next.delete(entry.path);
-          } else {
-            next.add(entry.path);
+          // Single-select: toggle this folder or replace
+          if (prev.has(entry.path)) {
+            return new Set();
           }
-          return next;
+          return new Set([entry.path]);
         });
       }
       return;
@@ -134,7 +132,7 @@ export function LocalFilePicker({
   const footerText =
     mode === 'directory'
       ? selected.size > 0
-        ? `${selected.size} folder(s) selected`
+        ? `Selected: ${Array.from(selected)[0].replace(/\\/g, '/').split('/').pop()}`
         : `Will use: ${currentPath}`
       : selected.size > 0
         ? `${selected.size} item(s) selected`
@@ -199,7 +197,9 @@ export function LocalFilePicker({
           ) : entries.length === 0 ? (
             <div className={styles.empty}>Empty directory</div>
           ) : (
-            entries.map((entry) => {
+            entries
+            .filter((entry) => mode === 'files' || entry.type === 'directory')
+            .map((entry) => {
               const isDir = entry.type === 'directory';
               const isSelected = selected.has(entry.path);
               // In directory mode, files are shown but not interactive
@@ -253,7 +253,7 @@ export function LocalFilePicker({
             >
               {mode === 'directory'
                 ? selected.size > 0
-                  ? `Select (${selected.size})`
+                  ? 'Select'
                   : 'Select Folder'
                 : `Select (${selected.size})`}
             </button>
