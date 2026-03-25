@@ -263,4 +263,16 @@ export const localApi = {
     const data = await response.json();
     return data.path ?? null;
   },
+
+  /**
+   * Open native OS file picker dialog (multi-select)
+   */
+  async pickFiles(initialDir?: string, title?: string): Promise<string[]> {
+    const params = new URLSearchParams();
+    if (initialDir) params.set('initial_dir', initialDir);
+    if (title) params.set('title', title);
+    const response = await fetch(`${API_BASE}/local/pick-files?${params}`);
+    const data = await response.json();
+    return data.paths ?? [];
+  },
 };

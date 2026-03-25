@@ -87,6 +87,22 @@ def _open_folder_dialog(initial_dir: str, title: str) -> Optional[str]:
     return folder or None
 
 
+def _open_files_dialog(initial_dir: str, title: str) -> List[str]:
+    """Open a native OS file picker dialog (multi-select). Must run on the main thread."""
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    files = filedialog.askopenfilenames(
+        initialdir=initial_dir if os.path.isdir(initial_dir) else None,
+        title=title,
+    )
+    root.destroy()
+    return list(files) if files else []
+
+
 @router.get("/pick-folder")
 async def pick_folder(
     initial_dir: str = Query("", description="Starting directory"),
@@ -97,3 +113,13 @@ async def pick_folder(
     if not selected:
         return {"path": None}
     return {"path": os.path.normpath(selected)}
+
+
+@router.get("/pick-files")
+async def pick_files(
+    initial_dir: str = Query("", description="Starting directory"),
+    title: str = Query("Select Files", description="Dialog title"),
+):
+    """Open a native OS file selection dialog (multi-select) and return chosen paths."""
+    selected = await asyncio.to_thread(_open_files_dialog, initial_dir, title)
+    return {"paths": [os.path.normpath(p) for p in selected]}

@@ -6,7 +6,6 @@ import { WirelessConnect } from './components/WirelessConnect';
 import { Toolbar } from './components/Toolbar';
 import { FileList } from './components/FileList';
 import { InputModal, ConfirmModal } from './components/Modal';
-import { LocalFilePicker, PickerMode } from './components/LocalFilePicker';
 import { Toast, ToastMessage } from './components/Toast';
 import { TransferQueue, TransferItem } from './components/TransferQueue';
 import { fileApi, deviceApi, localApi } from './services/api';
@@ -55,12 +54,6 @@ function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [storageInfo, setStorageInfo] = useState<DeviceStorageInfo[]>([]);
-
-  // Local file picker state
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<PickerMode>('files');
-  const [pickerTitle, setPickerTitle] = useState<string | undefined>();
-  const [pickerAction, setPickerAction] = useState<'upload' | 'download'>('upload');
 
   // Load files when device changes
   useEffect(() => {
@@ -113,20 +106,6 @@ function App() {
     }
     setShowNewFolder(false);
   }, [selectedDevice, currentPath, addToast, refresh]);
-
-  const handleUpload = useCallback(() => {
-    setPickerMode('files');
-    setPickerTitle('Select Files to Upload');
-    setPickerAction('upload');
-    setPickerOpen(true);
-  }, []);
-
-  const handleUploadFolder = useCallback(() => {
-    setPickerMode('directory');
-    setPickerTitle('Select Folder to Upload');
-    setPickerAction('upload');
-    setPickerOpen(true);
-  }, []);
 
   // Transfer queue helpers
   const updateTransfer = useCallback((id: string, patch: Partial<TransferItem>) => {
@@ -189,51 +168,91 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handlePickerSelect = useCallback(async (paths: string[]) => {
-    setPickerOpen(false);
-    if (!selectedDevice || paths.length === 0) return;
-
+  const handleUpload = useCallback(async () => {
+    if (!selectedDevice) return;
     const deviceId = selectedDevice.id;
+    const paths = await localApi.pickFiles('', 'Select Files to Upload');
+    if (paths.length === 0) return;
 
-    if (pickerAction === 'upload') {
-      const remoteDest = currentPath;
-      for (const localPath of paths) {
-        const name = localPath.replace(/\\/g, '/').split('/').pop() || localPath;
-        const itemId = `push-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const remoteDest = currentPath;
+    for (const localPath of paths) {
+      const name = localPath.replace(/\\/g, '/').split('/').pop() || localPath;
+      const itemId = `push-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        const item: TransferItem = {
-          id: itemId,
-          transferId,
-          fileName: name,
-          direction: 'push',
-          status: 'queued',
-          progress: 0,
-          speedBps: 0,
-          onCancel: () => cancelTransfer(deviceId, transferId, itemId),
-        };
+      const item: TransferItem = {
+        id: itemId,
+        transferId,
+        fileName: name,
+        direction: 'push',
+        status: 'queued',
+        progress: 0,
+        speedBps: 0,
+        onCancel: () => cancelTransfer(deviceId, transferId, itemId),
+      };
 
-        enqueueTransfer(item, async (iid, tid) => {
-          const stopPolling = startProgressPoll(deviceId, tid, iid);
-          try {
-            await fileApi.pushLocal(deviceId, localPath, remoteDest, tid);
-            stopPolling();
-            updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
-          } catch (err) {
-            stopPolling();
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            const cancelled = msg.toLowerCase().includes('cancel');
-            updateTransfer(iid, {
-              status: cancelled ? 'cancelled' : 'failed',
-              error: cancelled ? undefined : msg,
-              onCancel: undefined,
-            });
-          }
-          refresh();
+      enqueueTransfer(item, async (iid, tid) => {
+        const stopPolling = startProgressPoll(deviceId, tid, iid);
+        try {
+          await fileApi.pushLocal(deviceId, localPath, remoteDest, tid);
+          stopPolling();
+          updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
+        } catch (err) {
+          stopPolling();
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          const cancelled = msg.toLowerCase().includes('cancel');
+          updateTransfer(iid, {
+            status: cancelled ? 'cancelled' : 'failed',
+            error: cancelled ? undefined : msg,
+            onCancel: undefined,
+          });
+        }
+        refresh();
+      });
+    }
+  }, [selectedDevice, currentPath, cancelTransfer, startProgressPoll, updateTransfer, enqueueTransfer, refresh]);
+
+  const handleUploadFolder = useCallback(async () => {
+    if (!selectedDevice) return;
+    const deviceId = selectedDevice.id;
+    const folder = await localApi.pickFolder('', 'Select Folder to Upload');
+    if (!folder) return;
+
+    const remoteDest = currentPath;
+    const name = folder.replace(/\\/g, '/').split('/').pop() || folder;
+    const itemId = `push-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const item: TransferItem = {
+      id: itemId,
+      transferId,
+      fileName: name,
+      direction: 'push',
+      status: 'queued',
+      progress: 0,
+      speedBps: 0,
+      onCancel: () => cancelTransfer(deviceId, transferId, itemId),
+    };
+
+    enqueueTransfer(item, async (iid, tid) => {
+      const stopPolling = startProgressPoll(deviceId, tid, iid);
+      try {
+        await fileApi.pushLocal(deviceId, folder, remoteDest, tid);
+        stopPolling();
+        updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
+      } catch (err) {
+        stopPolling();
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        const cancelled = msg.toLowerCase().includes('cancel');
+        updateTransfer(iid, {
+          status: cancelled ? 'cancelled' : 'failed',
+          error: cancelled ? undefined : msg,
+          onCancel: undefined,
         });
       }
-    }
-  }, [selectedDevice, currentPath, selectedFiles, refresh, clearSelection, cancelTransfer, startProgressPoll, updateTransfer, enqueueTransfer]);
+      refresh();
+    });
+  }, [selectedDevice, currentPath, cancelTransfer, startProgressPoll, updateTransfer, enqueueTransfer, refresh]);
 
   const handleDownload = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;
@@ -396,15 +415,6 @@ function App() {
           )}
         </main>
       </div>
-
-      {/* Local file picker for upload/download */}
-      <LocalFilePicker
-        isOpen={pickerOpen}
-        mode={pickerMode}
-        title={pickerTitle}
-        onSelect={handlePickerSelect}
-        onCancel={() => setPickerOpen(false)}
-      />
 
       {/* Modals */}
       <InputModal

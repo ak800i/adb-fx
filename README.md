@@ -31,16 +31,20 @@ The only prerequisites are:
 
 - **Device sidebar**: Auto-discovers connected USB devices (polls every few seconds)
 - **File browser**: Navigate device filesystem, path bar with manual entry, back/up/home buttons
-- **Upload**: Local file picker browses the Windows filesystem (drives, folders, files) → backend pushes directly to device
-- **Download**: Select device files → local folder picker → backend pulls directly to that folder
+- **Virtualized file list**: Uses `react-window` to render only visible rows — handles directories with 20,000+ files without freezing or excessive memory usage
+- **Sortable columns**: Click column headers (Name, Size, Modified, Type) to sort; directories always sorted first. Type column shows file extension (e.g. PNG, TXT) for quick filtering
+- **Multi-select**: Click to select, Shift+click range select, Ctrl/Cmd+click toggle, header checkbox for select-all/deselect-all
+- **Upload files**: Native OS file picker (multi-select) → backend pushes directly to device
+- **Upload folder**: Native OS folder picker → backend pushes entire folder to device
+- **Download**: Select device files → native OS folder picker (with Quick Access/pinned folders) → backend pulls directly to that folder
 - **New folder**, **Delete** (with confirmation), **Rename**
+- **Paginated file listing**: Backend returns files in 1,000-entry pages to keep individual HTTP responses small; frontend auto-fetches all pages
 - **Cancellable transfers**: Push/pull operations can be cancelled mid-transfer via a stop button in the transfer queue
-- **Transfer queue panel**: A persistent, collapsible panel pinned to the bottom of the viewport (like a browser download manager). Active transfers show real-time progress bars, transfer speed (KB/s or MB/s), and cancel buttons; completed/failed/cancelled transfers remain visible until explicitly dismissed or cleared. Unlike ephemeral toast notifications, the transfer queue cannot be accidentally dismissed or auto-hidden during a long transfer.
+- **Transfer queue panel**: A persistent, collapsible panel pinned to the bottom of the viewport (like a browser download manager). Active transfers show real-time progress bars, transfer speed (KB/s or MB/s), and cancel buttons; completed/failed/cancelled transfers remain visible until explicitly dismissed or cleared.
 - **Serial transfer queue**: Transfers are processed one at a time. If additional files or folders are added while a transfer is in progress, they are queued (shown as "Queued" in the transfer panel) and executed sequentially — never in parallel. This prevents ADB contention and ensures predictable behaviour.
 - **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes. Progress endpoint also returns transfer speed (bytes/sec), not just percentage
 - **Transfer speed**: Displayed in the transfer queue as an exponentially-weighted moving average (smoothed), updated on each progress poll. Speed is computed on the backend from byte-count deltas between poll intervals.
 - **URL hash persistence**: Current path stored in `#/storage/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
-- The file picker remembers last browsed path across sessions (survives page close)
 
 ## Design
 
@@ -49,7 +53,7 @@ The only prerequisites are:
 - Sidebar (300px) + main content layout
 - Toasts for simple operation feedback (success/error with auto-dismiss)
 - Transfer queue panel (bottom of content area) for persistent progress tracking
-- Custom local file picker modal with drive buttons, breadcrumb navigation, file selection
+- Native OS dialogs for file/folder picking (upload and download)
 - Responsive breakpoints at 900px, 800px, 600px
 
 ## Key Design Decision
@@ -91,7 +95,7 @@ adb-fx/
 │   ├── src/
 │   │   ├── App.tsx        # Main application component
 │   │   ├── types.ts       # TypeScript type definitions
-│   │   ├── components/    # UI components (Toolbar, FileList, TransferQueue, LocalFilePicker, etc.)
+│   │   ├── components/    # UI components (Toolbar, FileList, TransferQueue, etc.)
 │   │   ├── hooks/         # React hooks (useDevices, useFileBrowser)
 │   │   └── services/
 │   │       └── api.ts     # Backend API client
@@ -107,7 +111,7 @@ adb-fx/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/devices` | List connected devices |
-| GET | `/api/devices/{id}/files` | List files in directory |
+| GET | `/api/devices/{id}/files` | List files in directory (paginated: `offset`, `limit`) |
 | POST | `/api/devices/{id}/files/push` | Push local file/folder to device |
 | POST | `/api/devices/{id}/files/pull` | Pull device file to local directory |
 | POST | `/api/devices/{id}/files/mkdir` | Create directory on device |
@@ -117,6 +121,8 @@ adb-fx/
 | GET | `/api/devices/{id}/files/progress` | Get transfer progress (0-100%), speed (bytes/s) |
 | GET | `/api/local/drives` | List Windows drive letters |
 | GET | `/api/local/list` | Browse local directory contents |
+| GET | `/api/local/pick-folder` | Open native OS folder picker dialog |
+| GET | `/api/local/pick-files` | Open native OS file picker dialog (multi-select) |
 
 ## License
 
