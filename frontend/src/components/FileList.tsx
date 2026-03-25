@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { List, type RowComponentProps } from 'react-window';
 import type { FileEntry } from '../types';
 import { 
@@ -11,11 +11,16 @@ import {
   Archive,
   Code,
   Link,
-  FileQuestion
+  FileQuestion,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import styles from './FileList.module.css';
 
 const ROW_HEIGHT = 40;
+
+type SortField = 'name' | 'type' | 'size' | 'modified';
+type SortDirection = 'asc' | 'desc';
 
 interface FileListProps {
   files: FileEntry[];
@@ -71,6 +76,11 @@ function getFileIcon(file: FileEntry) {
   }
   
   return <File size={20} className={styles.iconFile} />;
+}
+
+function getExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
 }
 
 function formatSize(bytes: number | null): string {
@@ -152,8 +162,8 @@ function Row({ index, style, files, selectedFiles, onFileDoubleClick, onRowClick
       <span className={styles.colDate}>
         {formatDate(file.modified)}
       </span>
-      <span className={styles.colPerms}>
-        {file.permissions || '-'}
+      <span className={styles.colType}>
+        {file.type === 'directory' ? 'Folder' : getExtension(file.name).toUpperCase() || '-'}
       </span>
     </div>
   );
@@ -173,9 +183,55 @@ export function FileList({
   const containerRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState(400);
   const anchorIndex = useRef<number | null>(null);
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDirection>('asc');
+
+  const sortedFiles = useMemo(() => {
+    const sorted = [...files];
+    sorted.sort((a, b) => {
+      // Directories always first
+      if (a.type === 'directory' && b.type !== 'directory') return -1;
+      if (a.type !== 'directory' && b.type === 'directory') return 1;
+
+      let cmp = 0;
+      switch (sortField) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+          break;
+        case 'type': {
+          const extA = getExtension(a.name);
+          const extB = getExtension(b.name);
+          cmp = extA.localeCompare(extB) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+          break;
+        }
+        case 'size':
+          cmp = (a.size ?? 0) - (b.size ?? 0);
+          break;
+        case 'modified': {
+          const tA = a.modified ? new Date(a.modified).getTime() : 0;
+          const tB = b.modified ? new Date(b.modified).getTime() : 0;
+          cmp = tA - tB;
+          break;
+        }
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [files, sortField, sortDir]);
+
+  const toggleSort = useCallback((field: SortField) => {
+    setSortField(prev => {
+      if (prev === field) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortDir('asc');
+      }
+      return field;
+    });
+  }, []);
 
   const handleRowClick = useCallback((index: number, shiftKey: boolean, ctrlKey: boolean) => {
-    const file = files[index];
+    const file = sortedFiles[index];
     if (shiftKey && anchorIndex.current !== null) {
       onSelectRange(anchorIndex.current, index);
     } else if (ctrlKey) {
@@ -188,7 +244,7 @@ export function FileList({
       onFileClick(file);
       anchorIndex.current = index;
     }
-  }, [files, selectedFiles.size, onFileClick, onToggleSelect, onSelectRange]);
+  }, [sortedFiles, selectedFiles.size, onFileClick, onToggleSelect, onSelectRange]);
 
   const updateHeight = useCallback(() => {
     if (containerRef.current) {
@@ -225,11 +281,18 @@ export function FileList({
   }
 
   const rowProps: RowData = {
-    files,
+    files: sortedFiles,
     selectedFiles,
     onFileClick,
     onFileDoubleClick,
     onRowClick: handleRowClick,
+  };
+
+  const sortIndicator = (field: SortField) => {
+    if (sortField !== field) return null;
+    return sortDir === 'asc'
+      ? <ChevronUp size={14} className={styles.sortIcon} />
+      : <ChevronDown size={14} className={styles.sortIcon} />;
   };
 
   return (
@@ -243,14 +306,22 @@ export function FileList({
             onChange={() => selectedFiles.size === files.length ? onClearSelection() : onSelectAll()}
           />
         </span>
-        <span className={styles.colName}>Name</span>
-        <span className={styles.colSize}>Size</span>
-        <span className={styles.colDate}>Modified</span>
-        <span className={styles.colPerms}>Permissions</span>
+        <span className={`${styles.colName} ${styles.sortable}`} onClick={() => toggleSort('name')}>
+          Name {sortIndicator('name')}
+        </span>
+        <span className={`${styles.colSize} ${styles.sortable}`} onClick={() => toggleSort('size')}>
+          Size {sortIndicator('size')}
+        </span>
+        <span className={`${styles.colDate} ${styles.sortable}`} onClick={() => toggleSort('modified')}>
+          Modified {sortIndicator('modified')}
+        </span>
+        <span className={`${styles.colType} ${styles.sortable}`} onClick={() => toggleSort('type')}>
+          Type {sortIndicator('type')}
+        </span>
       </div>
       
       <List
-        rowCount={files.length}
+        rowCount={sortedFiles.length}
         rowHeight={ROW_HEIGHT}
         rowComponent={Row}
         rowProps={rowProps}
