@@ -124,18 +124,19 @@ function Row({ index, style, files, selectedFiles, onFileClick, onFileDoubleClic
       onClick={(e) => {
         if (e.ctrlKey || e.metaKey) {
           onToggleSelect(file.path);
+        } else if (selectedFiles.size > 0) {
+          onToggleSelect(file.path);
         } else {
           onFileClick(file);
         }
       }}
       onDoubleClick={() => onFileDoubleClick(file)}
     >
-      <span className={styles.colCheck}>
+      <span className={styles.colCheck} onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={selectedFiles.has(file.path)}
           onChange={() => onToggleSelect(file.path)}
-          onClick={(e) => e.stopPropagation()}
         />
       </span>
       <span className={styles.colName}>
