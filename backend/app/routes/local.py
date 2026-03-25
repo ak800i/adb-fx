@@ -71,11 +71,25 @@ async def list_local(path: str = Query(..., description="Local directory path"))
     return LocalListResponse(path=path, parent=parent_path, entries=entries)
 
 
+def _set_dpi_aware():
+    """Enable DPI awareness so tkinter dialogs aren't blurry on scaled displays."""
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            import ctypes
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
 def _open_folder_dialog(initial_dir: str, title: str) -> Optional[str]:
     """Open a native OS folder picker dialog. Must run on the main thread."""
     import tkinter as tk
     from tkinter import filedialog
 
+    _set_dpi_aware()
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
@@ -92,6 +106,7 @@ def _open_files_dialog(initial_dir: str, title: str) -> List[str]:
     import tkinter as tk
     from tkinter import filedialog
 
+    _set_dpi_aware()
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
