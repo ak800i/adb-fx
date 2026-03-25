@@ -23,6 +23,7 @@ interface FileListProps {
   onFileClick: (file: FileEntry) => void;
   onFileDoubleClick: (file: FileEntry) => void;
   onToggleSelect: (path: string) => void;
+  onSelectRange: (fromIndex: number, toIndex: number) => void;
   loading: boolean;
 }
 
@@ -107,12 +108,12 @@ interface RowData {
   selectedFiles: Set<string>;
   onFileClick: (file: FileEntry) => void;
   onFileDoubleClick: (file: FileEntry) => void;
-  onToggleSelect: (path: string) => void;
+  onRowClick: (index: number, shiftKey: boolean, ctrlKey: boolean) => void;
 }
 
 type FileRowProps = RowComponentProps<RowData>;
 
-function Row({ index, style, files, selectedFiles, onFileClick, onFileDoubleClick, onToggleSelect }: FileRowProps) {
+function Row({ index, style, files, selectedFiles, onFileDoubleClick, onRowClick }: FileRowProps) {
   const file = files[index];
 
   return (
@@ -122,21 +123,16 @@ function Row({ index, style, files, selectedFiles, onFileClick, onFileDoubleClic
         selectedFiles.has(file.path) ? styles.selected : ''
       }`}
       onClick={(e) => {
-        if (e.ctrlKey || e.metaKey) {
-          onToggleSelect(file.path);
-        } else if (selectedFiles.size > 0) {
-          onToggleSelect(file.path);
-        } else {
-          onFileClick(file);
-        }
+        onRowClick(index, e.shiftKey, e.ctrlKey || e.metaKey);
       }}
       onDoubleClick={() => onFileDoubleClick(file)}
     >
-      <span className={styles.colCheck} onClick={(e) => e.stopPropagation()}>
+      <span className={styles.colCheck}>
         <input
           type="checkbox"
           checked={selectedFiles.has(file.path)}
-          onChange={() => onToggleSelect(file.path)}
+          readOnly
+          tabIndex={-1}
         />
       </span>
       <span className={styles.colName}>
@@ -167,10 +163,28 @@ export function FileList({
   onFileClick,
   onFileDoubleClick,
   onToggleSelect,
+  onSelectRange,
   loading,
 }: FileListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState(400);
+  const anchorIndex = useRef<number | null>(null);
+
+  const handleRowClick = useCallback((index: number, shiftKey: boolean, ctrlKey: boolean) => {
+    const file = files[index];
+    if (shiftKey && anchorIndex.current !== null) {
+      onSelectRange(anchorIndex.current, index);
+    } else if (ctrlKey) {
+      onToggleSelect(file.path);
+      anchorIndex.current = index;
+    } else if (selectedFiles.size > 0) {
+      onToggleSelect(file.path);
+      anchorIndex.current = index;
+    } else {
+      onFileClick(file);
+      anchorIndex.current = index;
+    }
+  }, [files, selectedFiles.size, onFileClick, onToggleSelect, onSelectRange]);
 
   const updateHeight = useCallback(() => {
     if (containerRef.current) {
@@ -211,7 +225,7 @@ export function FileList({
     selectedFiles,
     onFileClick,
     onFileDoubleClick,
-    onToggleSelect,
+    onRowClick: handleRowClick,
   };
 
   return (

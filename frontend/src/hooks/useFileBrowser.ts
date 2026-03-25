@@ -112,6 +112,18 @@ export function useFileBrowser(deviceId: string | null) {
     setSelectedFiles(new Set());
   }, []);
 
+  const selectRange = useCallback((fromIndex: number, toIndex: number) => {
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      for (let i = start; i <= end; i++) {
+        next.add(files[i].path);
+      }
+      return next;
+    });
+  }, [files]);
+
   const selectAll = useCallback(() => {
     setSelectedFiles(new Set(files.map(f => f.path)));
   }, [files]);
@@ -128,6 +140,7 @@ export function useFileBrowser(deviceId: string | null) {
     refresh,
     goUp,
     toggleSelection,
+    selectRange,
     clearSelection,
     selectAll,
   };

@@ -44,6 +44,7 @@ function App() {
     refresh,
     goUp,
     toggleSelection,
+    selectRange,
     clearSelection,
   } = useFileBrowser(selectedDevice?.id ?? null);
 
@@ -373,6 +374,7 @@ function App() {
                 onFileClick={handleFileClick}
                 onFileDoubleClick={handleFileDoubleClick}
                 onToggleSelect={toggleSelection}
+                onSelectRange={selectRange}
                 loading={filesLoading}
               />
               {/* Transfer queue (inline panel below file list) */}
