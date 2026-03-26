@@ -93,12 +93,37 @@
   font-family: monospace;
 }
 
+.deviceActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .deviceState {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.disconnectBtn {
+  padding: 4px 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.disconnectBtn:hover:not(:disabled) {
+  background: rgba(255, 80, 80, 0.15);
+  color: var(--danger);
+}
+
+.disconnectBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .stateIconConnected {
