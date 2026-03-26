@@ -878,13 +878,21 @@ class ADBWrapper:
         Disconnect a wireless device.
 
         Args:
-            address: IP address (or host) of the device.
-            port: TCP port (default 5555).
+            address: IP address (or host) of the device, or a full device
+                     identifier (e.g. mDNS name) to pass directly to
+                     ``adb disconnect``.
+            port: TCP port (default 5555). Only used when *address* looks
+                  like an IP address.
 
         Returns:
             Status message from adb.
         """
-        target = f"{address}:{port}"
+        import re
+        # Only append port for plain IP addresses
+        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', address):
+            target = f"{address}:{port}"
+        else:
+            target = address
         stdout, stderr, code = await self._run_command("disconnect", target, timeout=10)
         return (stdout + stderr).strip()
 

@@ -12,9 +12,10 @@ import {
 import { deviceApi } from '../services/api';
 import styles from './DeviceSelector.module.css';
 
-/** Returns true if the device ID looks like an IP:port wireless connection */
+/** Returns true if the device ID looks like a wireless connection (IP:port or mDNS TLS) */
 function isWirelessDevice(device: Device): boolean {
-  return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(device.id);
+  return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(device.id)
+    || device.id.includes('_adb-tls-connect');
 }
 
 interface DeviceSelectorProps {
@@ -36,10 +37,15 @@ export function DeviceSelector({
 
   const handleDisconnect = async (device: Device, e: React.MouseEvent) => {
     e.stopPropagation();
-    const [addr, port] = device.id.split(':');
     setDisconnecting(device.id);
     try {
-      await deviceApi.wirelessDisconnect(addr, parseInt(port));
+      // IP:port devices split cleanly; mDNS IDs are passed as the full address
+      const ipPortMatch = device.id.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)$/);
+      if (ipPortMatch) {
+        await deviceApi.wirelessDisconnect(ipPortMatch[1], parseInt(ipPortMatch[2]));
+      } else {
+        await deviceApi.wirelessDisconnect(device.id);
+      }
       onRefresh();
     } catch {
       // ignore — device list will update on next poll
@@ -98,13 +104,14 @@ export function DeviceSelector({
           </div>
         ) : (
           devices.map((device) => (
-            <button
+            <div
               key={device.id}
               className={`${styles.deviceItem} ${
                 selectedDevice?.id === device.id ? styles.selected : ''
               } ${device.state !== 'device' ? styles.unavailable : ''}`}
               onClick={() => device.state === 'device' && onSelect(device)}
-              disabled={device.state !== 'device'}
+              role="button"
+              tabIndex={device.state === 'device' ? 0 : -1}
             >
               <div className={styles.deviceInfo}>
                 <span className={styles.deviceModel}>
@@ -130,7 +137,7 @@ export function DeviceSelector({
                   </button>
                 )}
               </div>
-            </button>
+            </div>
           ))
         )}
       </div>
