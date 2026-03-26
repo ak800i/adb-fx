@@ -12,18 +12,28 @@ interface WirelessConnectProps {
   onConnected: () => void;
 }
 
+const STORAGE_KEY = 'adb-fx:wireless-ip';
+
+function getSavedIp(): string {
+  try { return localStorage.getItem(STORAGE_KEY) || ''; } catch { return ''; }
+}
+
+function saveIp(ip: string) {
+  try { localStorage.setItem(STORAGE_KEY, ip); } catch { /* ignore */ }
+}
+
 export function WirelessConnect({ usbDevices, onConnected }: WirelessConnectProps) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('connect');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // Connect form
-  const [address, setAddress] = useState('');
+  // Connect form — pre-fill IP from localStorage
+  const [address, setAddress] = useState(getSavedIp);
   const [port, setPort] = useState('5555');
 
-  // Pair form
-  const [pairAddress, setPairAddress] = useState('');
+  // Pair form — pre-fill IP from localStorage (port/code rotate, left empty)
+  const [pairAddress, setPairAddress] = useState(getSavedIp);
   const [pairPort, setPairPort] = useState('');
   const [pairCode, setPairCode] = useState('');
 
@@ -35,6 +45,7 @@ export function WirelessConnect({ usbDevices, onConnected }: WirelessConnectProp
     clearStatus();
     try {
       const res = await deviceApi.wirelessConnect(address.trim(), parseInt(port) || 5555);
+      if (res.success) saveIp(address.trim());
       setStatus({ ok: res.success, msg: res.message });
       onConnected();
     } catch (err) {
@@ -69,6 +80,7 @@ export function WirelessConnect({ usbDevices, onConnected }: WirelessConnectProp
         parseInt(pairPort),
         pairCode.trim(),
       );
+      if (res.success) saveIp(pairAddress.trim());
       setStatus({ ok: res.success, msg: res.message });
       onConnected();
     } catch (err) {
