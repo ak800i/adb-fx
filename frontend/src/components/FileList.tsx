@@ -28,7 +28,7 @@ interface FileListProps {
   onFileClick: (file: FileEntry) => void;
   onFileDoubleClick: (file: FileEntry) => void;
   onToggleSelect: (path: string) => void;
-  onSelectRange: (fromIndex: number, toIndex: number) => void;
+  onSelectRange: (paths: string[]) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   loading: boolean;
@@ -182,7 +182,7 @@ export function FileList({
 }: FileListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState(400);
-  const anchorIndex = useRef<number | null>(null);
+  const anchorPath = useRef<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
 
@@ -232,17 +232,23 @@ export function FileList({
 
   const handleRowClick = useCallback((index: number, shiftKey: boolean, ctrlKey: boolean) => {
     const file = sortedFiles[index];
-    if (shiftKey && anchorIndex.current !== null) {
-      onSelectRange(anchorIndex.current, index);
+    if (shiftKey && anchorPath.current !== null) {
+      const anchorIdx = sortedFiles.findIndex(f => f.path === anchorPath.current);
+      if (anchorIdx !== -1) {
+        const start = Math.min(anchorIdx, index);
+        const end = Math.max(anchorIdx, index);
+        const paths = sortedFiles.slice(start, end + 1).map(f => f.path);
+        onSelectRange(paths);
+      }
     } else if (ctrlKey) {
       onToggleSelect(file.path);
-      anchorIndex.current = index;
+      anchorPath.current = file.path;
     } else if (selectedFiles.size > 0) {
       onToggleSelect(file.path);
-      anchorIndex.current = index;
+      anchorPath.current = file.path;
     } else {
       onFileClick(file);
-      anchorIndex.current = index;
+      anchorPath.current = file.path;
     }
   }, [sortedFiles, selectedFiles.size, onFileClick, onToggleSelect, onSelectRange]);
 

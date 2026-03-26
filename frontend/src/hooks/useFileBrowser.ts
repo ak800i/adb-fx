@@ -112,17 +112,15 @@ export function useFileBrowser(deviceId: string | null) {
     setSelectedFiles(new Set());
   }, []);
 
-  const selectRange = useCallback((fromIndex: number, toIndex: number) => {
-    const start = Math.min(fromIndex, toIndex);
-    const end = Math.max(fromIndex, toIndex);
+  const selectRange = useCallback((paths: string[]) => {
     setSelectedFiles(prev => {
       const next = new Set(prev);
-      for (let i = start; i <= end; i++) {
-        next.add(files[i].path);
+      for (const p of paths) {
+        next.add(p);
       }
       return next;
     });
-  }, [files]);
+  }, []);
 
   const selectAll = useCallback(() => {
     setSelectedFiles(new Set(files.map(f => f.path)));
