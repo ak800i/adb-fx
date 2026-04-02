@@ -56,6 +56,34 @@ class ADBWrapper:
         """
         return path.replace("'", "'\\''")
 
+    @staticmethod
+    def _decode_ls_b(name: str) -> str:
+        """Decode octal escape sequences produced by ls -b.
+
+        ls -b represents non-printable bytes as \\NNN (3-digit octal).
+        We convert each escape back to the original byte, then decode
+        the result as UTF-8 (with replace for truly broken sequences).
+        """
+        # Fast path: no escapes
+        if "\\" not in name:
+            return name
+
+        result = bytearray()
+        i = 0
+        encoded = name.encode("latin-1")  # preserve raw byte values
+        while i < len(encoded):
+            if encoded[i:i+1] == b"\\" and i + 3 < len(encoded):
+                octal = encoded[i+1:i+4]
+                try:
+                    result.append(int(octal, 8))
+                    i += 4
+                    continue
+                except (ValueError, OverflowError):
+                    pass
+            result.append(encoded[i])
+            i += 1
+        return result.decode("utf-8", errors="replace")
+
     def _find_adb(self) -> str:
         """Find ADB executable in system PATH."""
         # Check for bundled ADB in repo's platform-tools directory first
@@ -424,10 +452,10 @@ class ADBWrapper:
         # Normalize path
         path = path.rstrip("/") or "/"
         
-        # Use ls -la for detailed listing
+        # Use ls -lab for detailed listing (-b escapes non-printable chars)
         escaped = self._shell_escape(path)
         stdout, stderr, code = await self._run_command(
-            "shell", f"ls -la '{escaped}'",
+            "shell", f"ls -lab '{escaped}'",
             device_id=device_id,
             timeout=60
         )
@@ -500,7 +528,9 @@ class ADBWrapper:
                 link_target = None
                 if " -> " in name:
                     name, link_target = name.split(" -> ", 1)
+                    link_target = self._decode_ls_b(link_target)
                 
+                name = self._decode_ls_b(name)
                 full_path = f"{base_path}/{name}".replace("//", "/")
                 
                 return FileEntry(
@@ -537,7 +567,10 @@ class ADBWrapper:
         link_target = None
         if " -> " in name:
             name, link_target = name.split(" -> ", 1)
+            link_target = self._decode_ls_b(link_target)
         
+        name = self._decode_ls_b(name)
+
         # Parse datetime
         try:
             modified = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
