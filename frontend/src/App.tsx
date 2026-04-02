@@ -36,6 +36,7 @@ function App() {
   const {
     currentPath,
     files,
+    totalFiles,
     parentPath,
     loading: filesLoading,
     selectedFiles,
@@ -378,6 +379,7 @@ function App() {
                 canGoUp={!!parentPath}
                 hasSelection={selectedFiles.size > 0}
                 selectionCount={selectedFiles.size}
+                totalFiles={totalFiles}
                 onGoUp={goUp}
                 onGoHome={handleGoHome}
                 onRefresh={refresh}

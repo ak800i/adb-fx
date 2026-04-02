@@ -26,6 +26,17 @@
   font-size: 13px;
 }
 
+.selectionInfo {
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.selectionCount {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .actions {
   display: flex;
   gap: 8px;
@@ -45,6 +56,10 @@
     display: none;
   }
   
+  .selectionInfo {
+    font-size: 12px;
+  }
+
   .actions button {
     padding: 8px;
   }

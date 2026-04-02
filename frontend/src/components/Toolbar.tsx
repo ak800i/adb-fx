@@ -18,6 +18,7 @@ interface ToolbarProps {
   canGoUp: boolean;
   hasSelection: boolean;
   selectionCount: number;
+  totalFiles: number;
   onGoUp: () => void;
   onGoHome: () => void;
   onRefresh: () => void;
@@ -34,6 +35,7 @@ export function Toolbar({
   canGoUp,
   hasSelection,
   selectionCount,
+  totalFiles,
   onGoUp,
   onGoHome,
   onRefresh,
@@ -93,6 +95,12 @@ export function Toolbar({
             }
           }}
         />
+      </div>
+
+      <div className={styles.selectionInfo}>
+        {hasSelection
+          ? <><span className={styles.selectionCount}>{selectionCount}</span> of {totalFiles} selected</>
+          : <>{totalFiles} items</>}
       </div>
 
       <div className={styles.actions}>
