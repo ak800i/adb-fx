@@ -303,6 +303,8 @@ function App() {
   const handleDelete = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;
 
+    setShowDeleteConfirm(false);
+
     for (const path of selectedFiles) {
       try {
         await fileApi.deleteFile(selectedDevice.id, path, true);
@@ -312,7 +314,6 @@ function App() {
       }
     }
     
-    setShowDeleteConfirm(false);
     clearSelection();
     refresh();
   }, [selectedDevice, selectedFiles, addToast, clearSelection, refresh]);
