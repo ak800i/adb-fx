@@ -230,6 +230,28 @@ export const fileApi = {
   },
 
   /**
+   * Pull multiple files from device in a single operation
+   */
+  async bulkPull(
+    deviceId: string,
+    paths: string[],
+    localDir: string,
+    transferId?: string,
+  ): Promise<OperationResult> {
+    const params = new URLSearchParams();
+    if (transferId) params.set('transfer_id', transferId);
+    const response = await fetch(
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/bulk-pull?${params}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths, local_dir: localDir }),
+      }
+    );
+    return handleResponse<OperationResult>(response);
+  },
+
+  /**
    * Rename/move a file or directory
    */
   async renameFile(

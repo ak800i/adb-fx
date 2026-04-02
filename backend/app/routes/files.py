@@ -11,6 +11,7 @@ from ..models import (
     CreateDirectoryRequest,
     DeleteRequest,
     BulkDeleteRequest,
+    BulkPullRequest,
     RenameRequest
 )
 
@@ -166,6 +167,36 @@ async def bulk_delete_files(
         return OperationResult(
             success=True,
             message=f"Deleted {len(request.paths)} item(s)"
+        )
+    except ADBError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/bulk-pull", response_model=OperationResult)
+async def bulk_pull_files(
+    device_id: str,
+    request: BulkPullRequest,
+    transfer_id: Optional[str] = Query(None, description="Transfer ID for progress/cancellation"),
+):
+    """Pull multiple files from device in a single operation with count-based progress."""
+    if not request.paths:
+        return OperationResult(success=True, message="Nothing to download")
+    if not os.path.isdir(request.local_dir):
+        raise HTTPException(status_code=404, detail=f"Local directory not found: {request.local_dir}")
+    try:
+        completed, failed = await adb.bulk_pull(
+            device_id, request.paths, request.local_dir, transfer_id=transfer_id
+        )
+        if failed:
+            return OperationResult(
+                success=True,
+                message=f"Downloaded {completed} file(s), {failed} failed",
+                path=request.local_dir,
+            )
+        return OperationResult(
+            success=True,
+            message=f"Downloaded {completed} file(s)",
+            path=request.local_dir,
         )
     except ADBError as e:
         raise HTTPException(status_code=400, detail=str(e))

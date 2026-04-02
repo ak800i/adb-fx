@@ -761,6 +761,72 @@ class ADBWrapper:
         await flush(batch)
         return True
 
+    async def bulk_pull(
+        self,
+        device_id: str,
+        remote_paths: list[str],
+        local_dir: str,
+        transfer_id: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """
+        Pull multiple files from device with count-based progress.
+
+        Returns (completed_count, failed_count).
+        """
+        os.makedirs(local_dir, exist_ok=True)
+        total = len(remote_paths)
+        completed = 0
+        failed = 0
+
+        if transfer_id:
+            self._transfer_progress[transfer_id] = {
+                "progress": 0, "bytes_transferred": 0,
+                "speed_bps": 0, "total_size": total,
+            }
+
+        try:
+            for remote_path in remote_paths:
+                # Check for cancellation
+                if transfer_id:
+                    with self._transfers_lock:
+                        if transfer_id not in self._active_transfers and completed > 0:
+                            # Was cancelled
+                            raise ADBError("Transfer cancelled")
+
+                filename = os.path.basename(remote_path)
+                local_dest = os.path.join(local_dir, filename)
+                try:
+                    stdout, stderr, code = await self._run_cancellable(
+                        "pull", remote_path, local_dest,
+                        device_id=device_id,
+                        transfer_id=transfer_id,
+                    )
+                    if code != 0:
+                        if code < 0 or "killed" in (stderr or "").lower():
+                            raise ADBError("Transfer cancelled")
+                        logger.warning("Failed to pull %s: %s", remote_path, stderr)
+                        failed += 1
+                    else:
+                        completed += 1
+                except ADBError:
+                    raise
+                except Exception:
+                    failed += 1
+
+                if transfer_id:
+                    pct = ((completed + failed) / total) * 100
+                    self._transfer_progress[transfer_id] = {
+                        "progress": pct,
+                        "bytes_transferred": completed + failed,
+                        "speed_bps": 0,
+                        "total_size": total,
+                    }
+        finally:
+            if transfer_id:
+                self._transfer_progress.pop(transfer_id, None)
+
+        return completed, failed
+
     async def mkdir(self, device_id: str, path: str) -> bool:
         """
         Create a directory on the device.

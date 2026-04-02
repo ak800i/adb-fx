@@ -86,6 +86,12 @@ class BulkDeleteRequest(BaseModel):
     paths: List[str] = Field(..., description="List of full paths to delete")
 
 
+class BulkPullRequest(BaseModel):
+    """Request to pull multiple files from device."""
+    paths: List[str] = Field(..., description="List of remote paths to pull")
+    local_dir: str = Field(..., description="Local destination directory")
+
+
 class RenameRequest(BaseModel):
     """Request to rename a file or directory."""
     old_path: str = Field(..., description="Current path")

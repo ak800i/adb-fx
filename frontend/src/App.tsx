@@ -263,15 +263,17 @@ function App() {
     const localDir = await localApi.pickFolder('', 'Choose Download Destination');
     if (!localDir) return; // User cancelled
 
-    for (const remotePath of selectedFiles) {
-      const name = remotePath.split('/').pop() || remotePath;
+    const paths = Array.from(selectedFiles);
+
+    if (paths.length > 200) {
+      // Bulk download: single transfer item with count-based progress
       const itemId = `pull-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       const item: TransferItem = {
         id: itemId,
         transferId,
-        fileName: name,
+        fileName: `${paths.length} files`,
         direction: 'pull',
         status: 'queued',
         progress: 0,
@@ -282,9 +284,10 @@ function App() {
       enqueueTransfer(item, async (iid, tid) => {
         const stopPolling = startProgressPoll(deviceId, tid, iid);
         try {
-          await fileApi.pullToLocal(deviceId, remotePath, localDir, tid);
+          const result = await fileApi.bulkPull(deviceId, paths, localDir, tid);
           stopPolling();
           updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
+          addToast('success', result.message);
         } catch (err) {
           stopPolling();
           const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -296,9 +299,45 @@ function App() {
           });
         }
       });
+    } else {
+      // Per-file download for smaller selections
+      for (const remotePath of paths) {
+        const name = remotePath.split('/').pop() || remotePath;
+        const itemId = `pull-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const transferId = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        const item: TransferItem = {
+          id: itemId,
+          transferId,
+          fileName: name,
+          direction: 'pull',
+          status: 'queued',
+          progress: 0,
+          speedBps: 0,
+          onCancel: () => cancelTransfer(deviceId, transferId, itemId),
+        };
+
+        enqueueTransfer(item, async (iid, tid) => {
+          const stopPolling = startProgressPoll(deviceId, tid, iid);
+          try {
+            await fileApi.pullToLocal(deviceId, remotePath, localDir, tid);
+            stopPolling();
+            updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
+          } catch (err) {
+            stopPolling();
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            const cancelled = msg.toLowerCase().includes('cancel');
+            updateTransfer(iid, {
+              status: cancelled ? 'cancelled' : 'failed',
+              error: cancelled ? undefined : msg,
+              onCancel: undefined,
+            });
+          }
+        });
+      }
     }
     clearSelection();
-  }, [selectedDevice, selectedFiles, clearSelection, cancelTransfer, startProgressPoll, updateTransfer, enqueueTransfer]);
+  }, [selectedDevice, selectedFiles, clearSelection, cancelTransfer, startProgressPoll, updateTransfer, enqueueTransfer, addToast]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedDevice || selectedFiles.size === 0) return;
