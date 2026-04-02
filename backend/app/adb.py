@@ -722,6 +722,45 @@ class ADBWrapper:
         
         return True
     
+    async def bulk_delete(
+        self,
+        device_id: str,
+        paths: list[str],
+    ) -> bool:
+        """
+        Delete multiple files/directories in batched shell commands.
+
+        Paths are grouped into batches to stay within safe command-line
+        length limits.
+        """
+        MAX_CMD_LEN = 4096  # conservative limit for adb shell
+        batch: list[str] = []
+        current_len = len("rm -rf")
+
+        async def flush(batch: list[str]) -> None:
+            if not batch:
+                return
+            args = " ".join(f"'{self._shell_escape(p)}'" for p in batch)
+            cmd = f"rm -rf {args}"
+            stdout, stderr, code = await self._run_command(
+                "shell", cmd, device_id=device_id
+            )
+            if code != 0 or "Permission denied" in stderr:
+                raise ADBError(f"Bulk delete failed: {stderr or stdout}")
+
+        for path in paths:
+            escaped = f"'{self._shell_escape(path)}'"
+            entry_len = len(escaped) + 1  # +1 for space
+            if current_len + entry_len > MAX_CMD_LEN and batch:
+                await flush(batch)
+                batch = []
+                current_len = len("rm -rf")
+            batch.append(path)
+            current_len += entry_len
+
+        await flush(batch)
+        return True
+
     async def mkdir(self, device_id: str, path: str) -> bool:
         """
         Create a directory on the device.

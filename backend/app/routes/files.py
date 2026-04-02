@@ -10,6 +10,7 @@ from ..models import (
     OperationResult, 
     CreateDirectoryRequest,
     DeleteRequest,
+    BulkDeleteRequest,
     RenameRequest
 )
 
@@ -147,6 +148,24 @@ async def delete_file(
             success=True,
             message="Deleted successfully",
             path=path
+        )
+    except ADBError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/bulk-delete", response_model=OperationResult)
+async def bulk_delete_files(
+    device_id: str,
+    request: BulkDeleteRequest
+):
+    """Delete multiple files or directories on the device in a single operation."""
+    if not request.paths:
+        return OperationResult(success=True, message="Nothing to delete")
+    try:
+        await adb.bulk_delete(device_id, request.paths)
+        return OperationResult(
+            success=True,
+            message=f"Deleted {len(request.paths)} item(s)"
         )
     except ADBError as e:
         raise HTTPException(status_code=400, detail=str(e))

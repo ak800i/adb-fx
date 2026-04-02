@@ -81,6 +81,11 @@ class DeleteRequest(BaseModel):
     recursive: bool = Field(False, description="Recursively delete directories")
 
 
+class BulkDeleteRequest(BaseModel):
+    """Request to delete multiple files or directories."""
+    paths: List[str] = Field(..., description="List of full paths to delete")
+
+
 class RenameRequest(BaseModel):
     """Request to rename a file or directory."""
     old_path: str = Field(..., description="Current path")

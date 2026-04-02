@@ -212,6 +212,24 @@ export const fileApi = {
   },
 
   /**
+   * Delete multiple files or directories in one operation
+   */
+  async bulkDelete(
+    deviceId: string,
+    paths: string[]
+  ): Promise<OperationResult> {
+    const response = await fetch(
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/bulk-delete`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths }),
+      }
+    );
+    return handleResponse<OperationResult>(response);
+  },
+
+  /**
    * Rename/move a file or directory
    */
   async renameFile(

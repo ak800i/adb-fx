@@ -304,16 +304,15 @@ function App() {
     if (!selectedDevice || selectedFiles.size === 0) return;
 
     setShowDeleteConfirm(false);
+    const count = selectedFiles.size;
 
-    for (const path of selectedFiles) {
-      try {
-        await fileApi.deleteFile(selectedDevice.id, path, true);
-        addToast('success', `Deleted: ${path.split('/').pop()}`);
-      } catch (err) {
-        addToast('error', `Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
+    try {
+      await fileApi.bulkDelete(selectedDevice.id, Array.from(selectedFiles));
+      addToast('success', `Deleted ${count} item(s)`);
+    } catch (err) {
+      addToast('error', `Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-    
+
     clearSelection();
     refresh();
   }, [selectedDevice, selectedFiles, addToast, clearSelection, refresh]);
