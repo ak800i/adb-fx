@@ -805,7 +805,7 @@ class ADBWrapper:
         transfer_id: Optional[str] = None,
     ) -> tuple[int, int]:
         """
-        Pull multiple files from device with count-based progress.
+        Pull multiple files from device with byte-level progress.
 
         Returns (completed_count, failed_count).
         """
@@ -817,8 +817,17 @@ class ADBWrapper:
         if transfer_id:
             self._transfer_progress[transfer_id] = {
                 "progress": 0, "bytes_transferred": 0,
-                "speed_bps": 0, "total_size": total,
+                "speed_bps": 0, "total_size": 0,
             }
+            # Sum remote file sizes for byte-level progress
+            total_bytes = 0
+            for rp in remote_paths:
+                sz = self._get_remote_file_size_sync(device_id, rp)
+                if sz and sz > 0:
+                    total_bytes += sz
+            if total_bytes > 0:
+                size_fn = lambda: self._get_local_total_size(local_dir)
+                self._start_progress_monitor(transfer_id, total_bytes, size_fn)
 
         try:
             for remote_path in remote_paths:
@@ -855,14 +864,6 @@ class ADBWrapper:
                 except Exception:
                     failed += 1
 
-                if transfer_id:
-                    pct = ((completed + failed) / total) * 100
-                    self._transfer_progress[transfer_id] = {
-                        "progress": pct,
-                        "bytes_transferred": completed + failed,
-                        "speed_bps": 0,
-                        "total_size": total,
-                    }
         finally:
             if transfer_id:
                 self._transfer_progress.pop(transfer_id, None)
