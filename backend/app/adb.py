@@ -217,9 +217,6 @@ class ADBWrapper:
             if stderr.strip():
                 logger.debug("STDERR: %s", stderr.strip())
             return (stdout, stderr, code)
-        except subprocess.TimeoutExpired:
-            logger.error("TIMEOUT: %s (after %ds)", " ".join(cmd), timeout)
-            raise ADBError(f"Command timed out after {timeout}s", " ".join(cmd))
         except FileNotFoundError:
             raise ADBError(
                 "ADB executable not found. Please install Android SDK Platform Tools.",
