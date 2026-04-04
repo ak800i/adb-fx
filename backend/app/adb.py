@@ -826,6 +826,13 @@ class ADBWrapper:
 
                 filename = os.path.basename(remote_path)
                 local_dest = os.path.join(local_dir, filename)
+                # Avoid overwriting if multiple remote files share the same name
+                if os.path.exists(local_dest):
+                    base, ext = os.path.splitext(filename)
+                    counter = 1
+                    while os.path.exists(local_dest):
+                        local_dest = os.path.join(local_dir, f"{base} ({counter}){ext}")
+                        counter += 1
                 try:
                     stdout, stderr, code = await self._run_cancellable(
                         "pull", remote_path, local_dest,
