@@ -1037,7 +1037,6 @@ class ADBWrapper:
         Returns:
             Status message from adb.
         """
-        import re
         # Only append port for plain IP addresses
         if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', address):
             target = f"{address}:{port}"
