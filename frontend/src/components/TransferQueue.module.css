@@ -162,6 +162,20 @@
   transition: width 0.2s ease;
 }
 
+.indeterminate {
+  width: 40% !important;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
 /* Speed + percentage */
 .stats {
   display: flex;

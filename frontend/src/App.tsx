@@ -344,17 +344,37 @@ function App() {
 
     setShowDeleteConfirm(false);
     const count = selectedFiles.size;
+    const paths = Array.from(selectedFiles);
+    const deviceId = selectedDevice.id;
 
-    try {
-      await fileApi.bulkDelete(selectedDevice.id, Array.from(selectedFiles));
-      addToast('success', `Deleted ${count} item(s)`);
-    } catch (err) {
-      addToast('error', `Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
+    const itemId = `del-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const transferId = '';
+
+    const item: TransferItem = {
+      id: itemId,
+      transferId,
+      fileName: `Delete ${count} item(s)`,
+      direction: 'delete',
+      status: 'queued',
+      progress: 0,
+      speedBps: 0,
+    };
 
     clearSelection();
-    refresh();
-  }, [selectedDevice, selectedFiles, addToast, clearSelection, refresh]);
+
+    enqueueTransfer(item, async (iid) => {
+      try {
+        await fileApi.bulkDelete(deviceId, paths);
+        updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0 });
+        addToast('success', `Deleted ${count} item(s)`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        updateTransfer(iid, { status: 'failed', error: msg });
+        addToast('error', `Failed to delete: ${msg}`);
+      }
+      refresh();
+    });
+  }, [selectedDevice, selectedFiles, addToast, clearSelection, refresh, enqueueTransfer, updateTransfer]);
 
   const handleGoHome = useCallback(() => {
     navigateTo('/storage');

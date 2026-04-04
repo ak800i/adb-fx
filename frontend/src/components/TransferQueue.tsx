@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import styles from './TransferQueue.module.css';
 
-export type TransferDirection = 'push' | 'pull';
+export type TransferDirection = 'push' | 'pull' | 'delete';
 export type TransferStatus = 'queued' | 'active' | 'completed' | 'failed' | 'cancelled';
 
 export interface TransferItem {
@@ -94,6 +94,8 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                   <AlertCircle size={16} />
                 ) : t.status === 'queued' ? (
                   <Clock size={16} />
+                ) : t.direction === 'delete' ? (
+                  <Trash2 size={16} />
                 ) : t.direction === 'push' ? (
                   <Upload size={16} />
                 ) : (
@@ -106,7 +108,12 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                 <span className={styles.name} title={t.fileName}>
                   {t.fileName}
                 </span>
-                {t.status === 'active' && (
+                {t.status === 'active' && t.direction === 'delete' && (
+                  <div className={styles.progressBar}>
+                    <div className={`${styles.progressFill} ${styles.indeterminate}`} />
+                  </div>
+                )}
+                {t.status === 'active' && t.direction !== 'delete' && (
                   <div className={styles.progressBar}>
                     <div
                       className={styles.progressFill}
