@@ -43,6 +43,7 @@ class ADBWrapper:
         """
         self.adb_path = adb_path or self._find_adb()
         self._active_transfers: Dict[str, subprocess.Popen] = {}
+        self._cancelled_transfers: set = set()
         self._transfer_progress: Dict[str, dict] = {}  # {progress, bytes_transferred, speed_bps, total_size}
         self._transfers_lock = threading.Lock()
     
@@ -338,6 +339,7 @@ class ADBWrapper:
     def cancel_transfer(self, transfer_id: str) -> bool:
         """Cancel a running transfer by killing its subprocess."""
         with self._transfers_lock:
+            self._cancelled_transfers.add(transfer_id)
             proc = self._active_transfers.pop(transfer_id, None)
         self._transfer_progress.pop(transfer_id, None)
         if proc:
@@ -822,8 +824,7 @@ class ADBWrapper:
                 # Check for cancellation
                 if transfer_id:
                     with self._transfers_lock:
-                        if transfer_id not in self._active_transfers and completed > 0:
-                            # Was cancelled
+                        if transfer_id in self._cancelled_transfers:
                             raise ADBError("Transfer cancelled")
 
                 filename = os.path.basename(remote_path)
@@ -857,6 +858,8 @@ class ADBWrapper:
         finally:
             if transfer_id:
                 self._transfer_progress.pop(transfer_id, None)
+                with self._transfers_lock:
+                    self._cancelled_transfers.discard(transfer_id)
 
         return completed, failed
 
