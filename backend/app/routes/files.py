@@ -18,6 +18,18 @@ from ..models import (
 router = APIRouter(prefix="/devices/{device_id}/files", tags=["files"])
 
 
+def _adb_status_code(e: ADBError) -> int:
+    """Map an ADBError to an appropriate HTTP status code."""
+    msg = e.message.lower()
+    if "not found" in msg or "no such file" in msg:
+        return 404
+    if "permission denied" in msg:
+        return 403
+    if "cancelled" in msg:
+        return 499  # Client Closed Request
+    return 500
+
+
 @router.get("", response_model=FileListResponse)
 async def list_files(
     device_id: str,
@@ -30,7 +42,7 @@ async def list_files(
         result = await adb.list_files(device_id, path, offset=offset, limit=limit)
         return result
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.post("/push", response_model=OperationResult)
@@ -61,7 +73,7 @@ async def push_local(
             path=remote_path,
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.post("/pull", response_model=OperationResult)
@@ -85,7 +97,7 @@ async def pull_to_local(
             path=local_dest,
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.get("/progress")
@@ -130,7 +142,7 @@ async def create_directory(
             path=request.path
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.delete("", response_model=OperationResult)
@@ -151,7 +163,7 @@ async def delete_file(
             path=path
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.post("/bulk-delete", response_model=OperationResult)
@@ -169,7 +181,7 @@ async def bulk_delete_files(
             message=f"Deleted {len(request.paths)} item(s)"
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.post("/bulk-pull", response_model=OperationResult)
@@ -199,7 +211,7 @@ async def bulk_pull_files(
             path=request.local_dir,
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.post("/rename", response_model=OperationResult)
@@ -216,7 +228,7 @@ async def rename_file(
             path=request.new_path
         )
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
 
 
 @router.get("/exists")
@@ -234,4 +246,4 @@ async def check_exists(
             "path": path
         }
     except ADBError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=_adb_status_code(e), detail=str(e))
