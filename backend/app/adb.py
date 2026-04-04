@@ -336,8 +336,12 @@ class ADBWrapper:
     def cancel_transfer(self, transfer_id: str) -> bool:
         """Cancel a running transfer by killing its subprocess."""
         with self._transfers_lock:
-            self._cancelled_transfers.add(transfer_id)
             proc = self._active_transfers.pop(transfer_id, None)
+            # Only mark as cancelled if there's an active bulk operation
+            # that will check and clean up the flag. Without this guard,
+            # stale IDs or single-file transfers would leak entries.
+            if proc or transfer_id in self._transfer_progress:
+                self._cancelled_transfers.add(transfer_id)
         self._transfer_progress.pop(transfer_id, None)
         if proc:
             try:
