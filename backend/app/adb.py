@@ -80,7 +80,7 @@ class ADBWrapper:
 
         result = bytearray()
         i = 0
-        encoded = name.encode("latin-1")  # preserve raw byte values
+        encoded = name.encode("utf-8")  # preserve raw byte values
         while i < len(encoded):
             if encoded[i:i+1] == b"\\" and i + 1 < len(encoded):
                 nxt = encoded[i + 1]
