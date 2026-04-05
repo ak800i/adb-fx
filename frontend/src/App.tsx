@@ -157,7 +157,7 @@ function App() {
           setTransfers((prev) =>
             prev.map((t) =>
               t.id === itemId && t.status === 'active'
-                ? { ...t, progress: info.progress, speedBps: info.speedBps }
+                ? { ...t, progress: info.progress, speedBps: info.speedBps, filesCompleted: info.filesCompleted, filesTotal: info.filesTotal }
                 : t
             )
           );

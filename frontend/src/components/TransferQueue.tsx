@@ -24,6 +24,8 @@ export interface TransferItem {
   status: TransferStatus;
   progress: number; // 0-100
   speedBps: number; // bytes per second
+  filesCompleted?: number;
+  filesTotal?: number;
   error?: string;
   onCancel?: () => void;
 }
@@ -121,12 +123,19 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                   </div>
                 )}
                 {t.status === 'active' && t.direction !== 'delete' && (
-                  <div className={styles.progressBar}>
-                    <div
-                      className={styles.progressFill}
-                      style={{ width: `${t.progress}%` }}
-                    />
-                  </div>
+                  <>
+                    <div className={styles.progressBar}>
+                      <div
+                        className={styles.progressFill}
+                        style={{ width: `${t.progress}%` }}
+                      />
+                    </div>
+                    {t.filesTotal != null && t.filesTotal > 0 && (
+                      <span className={styles.fileCount}>
+                        {t.filesCompleted ?? 0} of {t.filesTotal} files
+                      </span>
+                    )}
+                  </>
                 )}
                 {t.status === 'failed' && t.error && (
                   <span className={styles.error}>{t.error}</span>

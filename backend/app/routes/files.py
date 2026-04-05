@@ -115,6 +115,8 @@ async def get_progress(
         "speed_bps": info.get("speed_bps", 0),
         "bytes_transferred": info.get("bytes_transferred", 0),
         "total_size": info.get("total_size", 0),
+        "files_completed": info.get("files_completed"),
+        "files_total": info.get("files_total"),
     }
 
 

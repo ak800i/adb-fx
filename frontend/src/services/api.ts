@@ -167,14 +167,24 @@ export const fileApi = {
   /**
    * Get progress info for an in-progress transfer
    */
-  async getProgress(deviceId: string, transferId: string): Promise<{ progress: number; speedBps: number } | null> {
+  async getProgress(deviceId: string, transferId: string): Promise<{
+    progress: number;
+    speedBps: number;
+    filesCompleted?: number;
+    filesTotal?: number;
+  } | null> {
     const params = new URLSearchParams({ transfer_id: transferId });
     const response = await fetch(
       `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/progress?${params}`
     );
     const data = await response.json();
     if (data.progress == null) return null;
-    return { progress: data.progress, speedBps: data.speed_bps ?? 0 };
+    return {
+      progress: data.progress,
+      speedBps: data.speed_bps ?? 0,
+      filesCompleted: data.files_completed ?? undefined,
+      filesTotal: data.files_total ?? undefined,
+    };
   },
 
   /**
