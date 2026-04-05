@@ -59,9 +59,10 @@ class ADBWrapper:
 
     @staticmethod
     def _decode_ls_b(name: str) -> str:
-        """Decode octal escape sequences produced by ls -b.
+        """Decode escape sequences produced by ls -b.
 
-        ls -b represents non-printable bytes as \\NNN (3-digit octal).
+        ls -b escapes spaces as ``\\ `` (backslash-space), backslashes
+        as ``\\\\``, and non-printable bytes as ``\\NNN`` (3-digit octal).
         We convert each escape back to the original byte, then decode
         the result as UTF-8 (with replace for truly broken sequences).
         """
@@ -69,18 +70,34 @@ class ADBWrapper:
         if "\\" not in name:
             return name
 
+        _SIMPLE = {
+            ord(" "): b" ",
+            ord("\\"): b"\\",
+            ord("n"): b"\n",
+            ord("t"): b"\t",
+            ord("r"): b"\r",
+        }
+
         result = bytearray()
         i = 0
         encoded = name.encode("latin-1")  # preserve raw byte values
         while i < len(encoded):
-            if encoded[i:i+1] == b"\\" and i + 3 < len(encoded):
-                octal = encoded[i+1:i+4]
-                try:
-                    result.append(int(octal, 8))
-                    i += 4
+            if encoded[i:i+1] == b"\\" and i + 1 < len(encoded):
+                nxt = encoded[i + 1]
+                # Try 3-digit octal first
+                if i + 3 < len(encoded):
+                    octal = encoded[i+1:i+4]
+                    try:
+                        result.append(int(octal, 8))
+                        i += 4
+                        continue
+                    except (ValueError, OverflowError):
+                        pass
+                # Simple single-char escapes (\ , \\, \n, \t, \r)
+                if nxt in _SIMPLE:
+                    result.extend(_SIMPLE[nxt])
+                    i += 2
                     continue
-                except (ValueError, OverflowError):
-                    pass
             result.append(encoded[i])
             i += 1
         return result.decode("utf-8", errors="replace")
