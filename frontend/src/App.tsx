@@ -348,7 +348,7 @@ function App() {
     const deviceId = selectedDevice.id;
 
     const itemId = `del-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const transferId = '';
+    const transferId = `del-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const item: TransferItem = {
       id: itemId,
@@ -363,8 +363,9 @@ function App() {
     clearSelection();
 
     enqueueTransfer(item, async (iid) => {
+      const stopPoll = startProgressPoll(deviceId, transferId, iid);
       try {
-        await fileApi.bulkDelete(deviceId, paths);
+        await fileApi.bulkDelete(deviceId, paths, transferId);
         updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0 });
         addToast('success', `Deleted ${count} item(s)`);
       } catch (err) {
@@ -372,9 +373,10 @@ function App() {
         updateTransfer(iid, { status: 'failed', error: msg });
         addToast('error', `Failed to delete: ${msg}`);
       }
+      stopPoll();
       refresh();
     });
-  }, [selectedDevice, selectedFiles, addToast, clearSelection, refresh, enqueueTransfer, updateTransfer]);
+  }, [selectedDevice, selectedFiles, addToast, clearSelection, refresh, enqueueTransfer, updateTransfer, startProgressPoll]);
 
   const handleGoHome = useCallback(() => {
     navigateTo('/storage');

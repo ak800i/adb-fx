@@ -216,10 +216,14 @@ export const fileApi = {
    */
   async bulkDelete(
     deviceId: string,
-    paths: string[]
+    paths: string[],
+    transferId?: string,
   ): Promise<OperationResult> {
+    const params = new URLSearchParams();
+    if (transferId) params.set('transfer_id', transferId);
+    const qs = params.toString();
     const response = await fetch(
-      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/bulk-delete`,
+      `${API_BASE}/devices/${encodeURIComponent(deviceId)}/files/bulk-delete${qs ? `?${qs}` : ''}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

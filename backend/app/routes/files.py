@@ -169,13 +169,14 @@ async def delete_file(
 @router.post("/bulk-delete", response_model=OperationResult)
 async def bulk_delete_files(
     device_id: str,
-    request: BulkDeleteRequest
+    request: BulkDeleteRequest,
+    transfer_id: Optional[str] = Query(None, description="Transfer ID for progress tracking"),
 ):
     """Delete multiple files or directories on the device in a single operation."""
     if not request.paths:
         return OperationResult(success=True, message="Nothing to delete")
     try:
-        await adb.bulk_delete(device_id, request.paths)
+        await adb.bulk_delete(device_id, request.paths, transfer_id=transfer_id)
         return OperationResult(
             success=True,
             message=f"Deleted {len(request.paths)} item(s)"

@@ -780,18 +780,29 @@ class ADBWrapper:
         self,
         device_id: str,
         paths: list[str],
+        transfer_id: Optional[str] = None,
     ) -> bool:
         """
         Delete multiple files/directories in batched shell commands.
 
         Paths are grouped into batches to stay within safe command-line
-        length limits.
+        length limits.  Progress (0-100) is tracked via transfer_id.
         """
         MAX_CMD_LEN = 4096  # conservative limit for adb shell
+        total = len(paths)
+        deleted = 0
+
+        if transfer_id:
+            self._transfer_progress[transfer_id] = {
+                "progress": 0, "bytes_transferred": 0,
+                "speed_bps": 0, "total_size": total,
+            }
+
         batch: list[str] = []
         current_len = len("rm -rf")
 
         async def flush(batch: list[str]) -> None:
+            nonlocal deleted
             if not batch:
                 return
             args = " ".join(f"'{self._shell_escape(p)}'" for p in batch)
@@ -801,18 +812,30 @@ class ADBWrapper:
             )
             if code != 0 or "Permission denied" in stderr:
                 raise ADBError(f"Bulk delete failed: {stderr or stdout}")
+            deleted += len(batch)
+            if transfer_id and transfer_id in self._transfer_progress:
+                pct = int(deleted / total * 100) if total else 100
+                self._transfer_progress[transfer_id] = {
+                    "progress": pct, "bytes_transferred": deleted,
+                    "speed_bps": 0, "total_size": total,
+                }
 
-        for path in paths:
-            escaped = f"'{self._shell_escape(path)}'"
-            entry_len = len(escaped) + 1  # +1 for space
-            if current_len + entry_len > MAX_CMD_LEN and batch:
-                await flush(batch)
-                batch = []
-                current_len = len("rm -rf")
-            batch.append(path)
-            current_len += entry_len
+        try:
+            for path in paths:
+                escaped = f"'{self._shell_escape(path)}'"
+                entry_len = len(escaped) + 1  # +1 for space
+                if current_len + entry_len > MAX_CMD_LEN and batch:
+                    await flush(batch)
+                    batch = []
+                    current_len = len("rm -rf")
+                batch.append(path)
+                current_len += entry_len
 
-        await flush(batch)
+            await flush(batch)
+        finally:
+            if transfer_id:
+                self._transfer_progress.pop(transfer_id, None)
+
         return True
 
     async def bulk_pull(

@@ -110,7 +110,14 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
                 </span>
                 {t.status === 'active' && t.direction === 'delete' && (
                   <div className={styles.progressBar}>
-                    <div className={`${styles.progressFill} ${styles.indeterminate}`} />
+                    {t.progress > 0 ? (
+                      <div
+                        className={styles.progressFill}
+                        style={{ width: `${t.progress}%` }}
+                      />
+                    ) : (
+                      <div className={`${styles.progressFill} ${styles.indeterminate}`} />
+                    )}
                   </div>
                 )}
                 {t.status === 'active' && t.direction !== 'delete' && (
