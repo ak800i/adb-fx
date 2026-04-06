@@ -78,21 +78,21 @@ class ADBWrapper:
             ord("r"): b"\r",
         }
 
+        _OCTAL = set(b'01234567')
+
         result = bytearray()
         i = 0
         encoded = name.encode("utf-8")  # preserve raw byte values
         while i < len(encoded):
             if encoded[i:i+1] == b"\\" and i + 1 < len(encoded):
                 nxt = encoded[i + 1]
-                # Try 3-digit octal first
+                # Try 3-digit octal first (all 3 must be octal digits 0-7)
                 if i + 3 < len(encoded):
                     octal = encoded[i+1:i+4]
-                    try:
+                    if all(b in _OCTAL for b in octal):
                         result.append(int(octal, 8))
                         i += 4
                         continue
-                    except (ValueError, OverflowError):
-                        pass
                 # Simple single-char escapes (\ , \\, \n, \t, \r)
                 if nxt in _SIMPLE:
                     result.extend(_SIMPLE[nxt])
@@ -774,6 +774,15 @@ class ADBWrapper:
         if code != 0 or "Permission denied" in stderr:
             raise ADBError(f"Failed to delete: {stderr or stdout}")
         
+        # Verify item was actually deleted (rm -f silently succeeds for
+        # non-existent paths, which can hide encoding mismatches)
+        check_stdout, _, _ = await self._run_command(
+            "shell", f"[ -e '{escaped}' ] && echo EXISTS",
+            device_id=device_id
+        )
+        if "EXISTS" in check_stdout:
+            raise ADBError(f"Failed to delete (file still exists): {path}")
+        
         return True
     
     async def bulk_delete(
@@ -812,6 +821,20 @@ class ADBWrapper:
             )
             if code != 0 or "Permission denied" in stderr:
                 raise ADBError(f"Bulk delete failed: {stderr or stdout}")
+            # Verify items were actually deleted
+            still_exist = []
+            for p in batch:
+                esc = self._shell_escape(p)
+                chk, _, _ = await self._run_command(
+                    "shell", f"[ -e '{esc}' ] && echo EXISTS",
+                    device_id=device_id
+                )
+                if "EXISTS" in chk:
+                    still_exist.append(p)
+            if still_exist:
+                raise ADBError(
+                    f"Bulk delete failed: {len(still_exist)} item(s) still exist"
+                )
             deleted += len(batch)
             if transfer_id and transfer_id in self._transfer_progress:
                 pct = int(deleted / total * 100) if total else 100
