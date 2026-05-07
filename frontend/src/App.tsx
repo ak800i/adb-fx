@@ -55,6 +55,7 @@ function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [storageInfo, setStorageInfo] = useState<DeviceStorageInfo[]>([]);
+  const [speedHistory, setSpeedHistory] = useState<{ time: number; speed: number }[]>([]);
 
   // Load files when device changes
   useEffect(() => {
@@ -68,6 +69,17 @@ function App() {
       setStorageInfo([]);
     }
   }, [selectedDevice]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear speed history when all transfers finish
+  useEffect(() => {
+    if (
+      transfers.length > 0 &&
+      transfers.every((t) => t.status !== 'active' && t.status !== 'queued') &&
+      speedHistory.length > 0
+    ) {
+      setSpeedHistory([]);
+    }
+  }, [transfers, speedHistory.length]);
 
   // Toast helpers
   const addToast = useCallback((type: ToastMessage['type'], message: string) => {
@@ -161,6 +173,7 @@ function App() {
                 : t
             )
           );
+          setSpeedHistory((prev) => [...prev, { time: Date.now(), speed: info.speedBps }]);
         }
       } catch {
         // ignore polling errors
@@ -197,6 +210,7 @@ function App() {
         try {
           await fileApi.pushLocal(deviceId, localPath, remoteDest, tid);
           stopPolling();
+          setSpeedHistory((prev) => [...prev, { time: Date.now(), speed: 0 }]);
           updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
         } catch (err) {
           stopPolling();
@@ -240,6 +254,7 @@ function App() {
       try {
         await fileApi.pushLocal(deviceId, folder, remoteDest, tid);
         stopPolling();
+        setSpeedHistory((prev) => [...prev, { time: Date.now(), speed: 0 }]);
         updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
       } catch (err) {
         stopPolling();
@@ -286,6 +301,7 @@ function App() {
         try {
           const result = await fileApi.bulkPull(deviceId, paths, localDir, tid);
           stopPolling();
+          setSpeedHistory((prev) => [...prev, { time: Date.now(), speed: 0 }]);
           updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
           addToast('success', result.message);
         } catch (err) {
@@ -322,6 +338,7 @@ function App() {
           try {
             await fileApi.pullToLocal(deviceId, remotePath, localDir, tid);
             stopPolling();
+            setSpeedHistory((prev) => [...prev, { time: Date.now(), speed: 0 }]);
             updateTransfer(iid, { status: 'completed', progress: 100, speedBps: 0, onCancel: undefined });
           } catch (err) {
             stopPolling();
@@ -465,6 +482,7 @@ function App() {
               {/* Transfer queue (inline panel below file list) */}
               <TransferQueue
                 transfers={transfers}
+                speedHistory={speedHistory}
                 onDismiss={dismissTransfer}
                 onClearCompleted={clearCompletedTransfers}
               />
