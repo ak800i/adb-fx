@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import styles from './TransferQueue.module.css';
+import { formatSpeed } from '../utils/formatSpeed';
 
 export type TransferDirection = 'push' | 'pull' | 'delete';
 export type TransferStatus = 'queued' | 'active' | 'completed' | 'failed' | 'cancelled';
@@ -34,13 +35,6 @@ interface TransferQueueProps {
   transfers: TransferItem[];
   onDismiss: (id: string) => void;
   onClearCompleted: () => void;
-}
-
-function formatSpeed(bps: number): string {
-  if (bps <= 0) return '';
-  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
-  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
-  return `${bps} B/s`;
 }
 
 export function TransferQueue({ transfers, onDismiss, onClearCompleted }: TransferQueueProps) {
