@@ -16,9 +16,10 @@
 
 | File | Role |
 |------|------|
+| `frontend/src/utils/formatSpeed.ts` | **Create** — Shared `formatSpeed` utility function (avoids circular import) |
 | `frontend/src/components/SpeedGraph.tsx` | **Create** — Recharts AreaChart component with gradient fill, formatted axes, tooltip |
 | `frontend/src/components/SpeedGraph.module.css` | **Create** — Container wrapper class (120px height) |
-| `frontend/src/components/TransferQueue.tsx` | **Modify** — Add `speedHistory` prop, extract `formatSpeed` as exported function, render `SpeedGraph` between header and list |
+| `frontend/src/components/TransferQueue.tsx` | **Modify** — Add `speedHistory` prop, import `formatSpeed` from utils, render `SpeedGraph` between header and list |
 | `frontend/src/components/TransferQueue.module.css` | **Modify** — Bump `.panel` `max-height` from `220px` to `340px` |
 | `frontend/src/App.tsx` | **Modify** — Add `speedHistory` state, collect speed data in poll callback, insert zero-speed on transfer complete, add clear-policy `useEffect`, pass `speedHistory` to `<TransferQueue>` |
 | `frontend/package.json` | **Modify** — Add `recharts` dependency |
@@ -62,27 +63,54 @@ git commit -m "chore: add recharts dependency"
 ### Task 2: Extract `formatSpeed` and Create SpeedGraph Component
 
 **Files:**
+- Create: `frontend/src/utils/formatSpeed.ts`
 - Modify: `frontend/src/components/TransferQueue.tsx` (lines 40-45 — `formatSpeed` function)
 - Create: `frontend/src/components/SpeedGraph.tsx`
 - Create: `frontend/src/components/SpeedGraph.module.css`
 
-- [ ] **Step 1: Export `formatSpeed` from TransferQueue.tsx**
+- [ ] **Step 1: Create shared `formatSpeed` utility**
 
-In `frontend/src/components/TransferQueue.tsx`, change the existing `formatSpeed` function from a local function to an exported one. Find:
-
-```typescript
-function formatSpeed(bps: number): string {
-```
-
-Replace with:
+Create `frontend/src/utils/formatSpeed.ts`:
 
 ```typescript
 export function formatSpeed(bps: number): string {
+  if (bps <= 0) return '';
+  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
+  return `${bps} B/s`;
+}
 ```
 
-No other changes to this function. It remains in `TransferQueue.tsx` so existing usage stays the same.
+- [ ] **Step 2: Update TransferQueue.tsx to import from utils**
 
-- [ ] **Step 2: Create SpeedGraph.module.css**
+In `frontend/src/components/TransferQueue.tsx`, find the local `formatSpeed` function (lines 40-45):
+
+```typescript
+function formatSpeed(bps: number): string {
+  if (bps <= 0) return '';
+  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
+  return `${bps} B/s`;
+}
+```
+
+Replace the entire function with an import. Add this line after the existing imports (after `import styles from './TransferQueue.module.css';`):
+
+```typescript
+import { formatSpeed } from '../utils/formatSpeed';
+```
+
+And delete the `formatSpeed` function body entirely. The existing call site `{formatSpeed(t.speedBps)}` continues to work via the import.
+
+Also re-export it so `App.tsx`'s existing import path (`from './components/TransferQueue'`) doesn't need to change for unrelated consumers:
+
+```typescript
+export { formatSpeed } from '../utils/formatSpeed';
+```
+
+Add this line right after the import. This is optional but keeps the public API stable.
+
+- [ ] **Step 3: Create SpeedGraph.module.css**
 
 Create `frontend/src/components/SpeedGraph.module.css`:
 
@@ -94,7 +122,7 @@ Create `frontend/src/components/SpeedGraph.module.css`:
 }
 ```
 
-- [ ] **Step 3: Create SpeedGraph.tsx**
+- [ ] **Step 4: Create SpeedGraph.tsx**
 
 Create `frontend/src/components/SpeedGraph.tsx`:
 
@@ -107,7 +135,7 @@ import {
   YAxis,
   Tooltip,
 } from 'recharts';
-import { formatSpeed } from './TransferQueue';
+import { formatSpeed } from '../utils/formatSpeed';
 import styles from './SpeedGraph.module.css';
 
 interface SpeedGraphProps {
@@ -200,7 +228,7 @@ Key details:
 - Tooltip uses the shared `formatSpeed` function.
 - Y-axis width is `60` to accommodate labels like "12.5 MB/s".
 
-- [ ] **Step 4: Verify build compiles**
+- [ ] **Step 5: Verify build compiles**
 
 Run:
 
@@ -208,13 +236,13 @@ Run:
 cd frontend && npx tsc --noEmit
 ```
 
-Expected: No errors. (SpeedGraph is not rendered anywhere yet, but it should compile.)
+Expected: No errors. (SpeedGraph is not rendered anywhere yet, but it should compile. No circular imports — both SpeedGraph and TransferQueue import from `utils/formatSpeed`.)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/components/SpeedGraph.tsx frontend/src/components/SpeedGraph.module.css frontend/src/components/TransferQueue.tsx
-git commit -m "feat: add SpeedGraph component with Recharts AreaChart"
+git add frontend/src/utils/formatSpeed.ts frontend/src/components/SpeedGraph.tsx frontend/src/components/SpeedGraph.module.css frontend/src/components/TransferQueue.tsx
+git commit -m "feat: extract formatSpeed utility, add SpeedGraph component"
 ```
 
 ---
@@ -267,13 +295,15 @@ Replace with:
 ```typescript
 interface TransferQueueProps {
   transfers: TransferItem[];
-  speedHistory: { time: number; speed: number }[];
+  speedHistory?: { time: number; speed: number }[];
   onDismiss: (id: string) => void;
   onClearCompleted: () => void;
 }
 ```
 
-**2c.** Update the destructured props. Find:
+Note: `speedHistory` is optional (`?`) so the build stays green before `App.tsx` is updated in Task 4.
+
+**2c.** Update the destructured props with a default value. Find:
 
 ```typescript
 export function TransferQueue({ transfers, onDismiss, onClearCompleted }: TransferQueueProps) {
@@ -282,7 +312,7 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
 Replace with:
 
 ```typescript
-export function TransferQueue({ transfers, speedHistory, onDismiss, onClearCompleted }: TransferQueueProps) {
+export function TransferQueue({ transfers, speedHistory = [], onDismiss, onClearCompleted }: TransferQueueProps) {
 ```
 
 **2d.** Render the graph between the header and the list. Find this block inside the `!collapsed` conditional:
@@ -336,7 +366,7 @@ Run:
 cd frontend && npx tsc --noEmit
 ```
 
-Expected: Compilation error in `App.tsx` because `<TransferQueue>` is now missing the required `speedHistory` prop. This is expected — we fix it in Task 4.
+Expected: No errors. The `speedHistory` prop is optional with a default of `[]`, so `App.tsx` compiles without changes. The graph simply won't render until `App.tsx` passes data in Task 4.
 
 - [ ] **Step 4: Commit**
 
@@ -352,7 +382,7 @@ git commit -m "feat: integrate SpeedGraph into TransferQueue panel"
 **Files:**
 - Modify: `frontend/src/App.tsx`
 
-This is the most complex task. Three changes to App.tsx: (1) add state, (2) collect data in poll callback, (3) add clear-policy useEffect, (4) pass prop, (5) insert zero-speed on transfer complete.
+This is the most complex task. Five changes to App.tsx: (1) add state, (2) collect data in poll callback, (3) insert zero-speed on transfer complete, (4) add clear-policy useEffect, (5) pass prop.
 
 - [ ] **Step 1: Add `speedHistory` state**
 
