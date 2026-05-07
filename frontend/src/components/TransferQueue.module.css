@@ -4,7 +4,7 @@
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
-  max-height: 220px;
+  max-height: 340px;
   flex-shrink: 0;
 }
 

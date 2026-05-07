@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import styles from './TransferQueue.module.css';
 import { formatSpeed } from '../utils/formatSpeed';
+import { SpeedGraph } from './SpeedGraph';
 
 export type TransferDirection = 'push' | 'pull' | 'delete';
 export type TransferStatus = 'queued' | 'active' | 'completed' | 'failed' | 'cancelled';
@@ -33,11 +34,12 @@ export interface TransferItem {
 
 interface TransferQueueProps {
   transfers: TransferItem[];
+  speedHistory?: { time: number; speed: number }[];
   onDismiss: (id: string) => void;
   onClearCompleted: () => void;
 }
 
-export function TransferQueue({ transfers, onDismiss, onClearCompleted }: TransferQueueProps) {
+export function TransferQueue({ transfers, speedHistory = [], onDismiss, onClearCompleted }: TransferQueueProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   if (transfers.length === 0) return null;
@@ -77,9 +79,13 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
         </span>
       </button>
 
-      {/* Transfer list */}
+      {/* Speed graph + transfer list */}
       {!collapsed && (
-        <div className={styles.list}>
+        <>
+          {speedHistory.length > 1 && activeCount > 0 && (
+            <SpeedGraph data={speedHistory} />
+          )}
+          <div className={styles.list}>
           {transfers.map((t) => (
             <div key={t.id} className={`${styles.item} ${styles[t.status]}`}>
               {/* Icon */}
@@ -173,6 +179,7 @@ export function TransferQueue({ transfers, onDismiss, onClearCompleted }: Transf
             </div>
           ))}
         </div>
+        </>
       )}
     </div>
   );
