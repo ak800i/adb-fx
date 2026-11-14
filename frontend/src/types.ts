@@ -12,6 +12,7 @@ export interface Device {
   state: DeviceState;
   product: string | null;
   transport_id: string | null;
+  usb?: string | null;
 }
 
 export interface FileEntry {
@@ -46,6 +47,29 @@ export interface DeviceStorageInfo {
   used: number;
   available: number;
   mount_point: string;
+}
+
+export interface ConnectionInfo {
+  transport: 'usb' | 'wifi';
+  usb_path: string | null;
+  usb_speed: string | null;
+  usb_speed_label: string | null;
+  usb_speed_bps: number | null;
+  usb_max_speed: string | null;
+  usb_max_speed_label: string | null;
+  usb_controller: string | null;
+  usb_functions: string | null;
+  usb_voltage_mv: number | null;
+  usb_current_ma: number | null;
+  power_source: string | null;
+  battery_level: number | null;
+  battery_status: string | null;
+  battery_temp_c: number | null;
+  manufacturer: string | null;
+  model: string | null;
+  android_version: string | null;
+  sdk: number | null;
+  adb_version: string | null;
 }
 
 // Local filesystem types

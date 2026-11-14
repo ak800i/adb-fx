@@ -10,9 +10,11 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  File as FileIcon,
 } from 'lucide-react';
 import styles from './TransferQueue.module.css';
 import { formatSpeed } from '../utils/formatSpeed';
+import { formatBytes } from '../utils/formatBytes';
 import { SpeedGraph } from './SpeedGraph';
 
 export type TransferDirection = 'push' | 'pull' | 'delete';
@@ -28,6 +30,9 @@ export interface TransferItem {
   speedBps: number; // bytes per second
   filesCompleted?: number;
   filesTotal?: number;
+  currentFile?: string; // file being copied right now (inside a folder or bulk transfer)
+  bytesTransferred?: number;
+  totalSize?: number;
   error?: string;
   onCancel?: () => void;
 }
@@ -130,11 +135,19 @@ export function TransferQueue({ transfers, speedHistory = [], onDismiss, onClear
                         style={{ width: `${t.progress}%` }}
                       />
                     </div>
-                    {t.filesTotal != null && t.filesTotal > 0 && (
-                      <span className={styles.fileCount}>
-                        {t.filesCompleted ?? 0} of {t.filesTotal} files
+                    {t.currentFile && t.currentFile !== t.fileName && (
+                      <span className={styles.currentFile} title={t.currentFile}>
+                        <FileIcon size={11} />
+                        <span className={styles.currentFileName}>{t.currentFile}</span>
                       </span>
                     )}
+                    {(t.filesTotal != null && t.filesTotal > 0) || (t.totalSize ?? 0) > 0 ? (
+                      <span className={styles.fileCount}>
+                        {t.filesTotal != null && t.filesTotal > 0
+                          ? `${t.filesCompleted ?? 0} of ${t.filesTotal} files`
+                          : `${formatBytes(t.bytesTransferred ?? 0)} of ${formatBytes(t.totalSize ?? 0)}`}
+                      </span>
+                    ) : null}
                   </>
                 )}
                 {t.status === 'failed' && t.error && (

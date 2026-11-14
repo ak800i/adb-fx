@@ -17,7 +17,7 @@ from datetime import datetime
 logger = logging.getLogger("adb")
 from .models import (
     Device, DeviceState, FileEntry, FileType, 
-    FileListResponse, DeviceStorageInfo
+    FileListResponse, DeviceStorageInfo, ConnectionInfo
 )
 
 
@@ -292,6 +292,73 @@ class ADBWrapper:
                     pass
         return total
 
+    @staticmethod
+    def _scan_local_tree(path: str) -> Tuple[int, Optional[str]]:
+        """Walk a local directory being written by `adb pull`.
+
+        Returns (total_bytes, current_file). The current file is the one
+        with the newest modification time — adb writes files one at a
+        time, so the newest one is the file in flight. It is returned
+        relative to the parent of `path`, e.g. "Camera/IMG_0001.jpg".
+        """
+        total = 0
+        newest_mtime = -1.0
+        newest_path: Optional[str] = None
+        for dirpath, _dirnames, filenames in os.walk(path):
+            for f in filenames:
+                full = os.path.join(dirpath, f)
+                try:
+                    st = os.stat(full)
+                except OSError:
+                    continue
+                total += st.st_size
+                if st.st_mtime >= newest_mtime:
+                    newest_mtime = st.st_mtime
+                    newest_path = full
+        rel = None
+        if newest_path:
+            base = os.path.dirname(os.path.normpath(path))
+            rel = os.path.relpath(newest_path, base).replace("\\", "/")
+        return total, rel
+
+    def _get_remote_dir_progress_sync(
+        self, device_id: str, remote_path: str
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """Bytes written so far + the file in flight for a folder `adb push`.
+
+        One `adb shell` round trip runs both:
+          - `du -sb` for the bytes written so far
+          - `find -mmin -1` for files touched in the last minute; the one
+            with the newest mtime is the file adb is writing right now
+            (finished files get the source file's older mtime restored).
+        """
+        escaped = self._shell_escape(remote_path)
+        shell_cmd = (
+            f"du -sb '{escaped}' 2>/dev/null | cut -f1; "
+            f"find '{escaped}' -type f -mmin -1 -exec stat -c '%Y %n' {{}} + 2>/dev/null "
+            f"| sort -n | tail -n 1"
+        )
+        try:
+            result = subprocess.run(
+                [self.adb_path, "-s", device_id, "shell", shell_cmd],
+                capture_output=True, timeout=10,
+            )
+        except Exception as e:
+            logger.debug("DIR PROGRESS exception: %s", e)
+            return None, None
+        lines = result.stdout.decode("utf-8", errors="replace").strip().splitlines()
+        size: Optional[int] = None
+        current: Optional[str] = None
+        if lines and lines[0].strip().isdigit():
+            size = int(lines[0].strip())
+        if len(lines) > 1:
+            parts = lines[-1].strip().split(" ", 1)
+            if len(parts) == 2:
+                full = parts[1]
+                parent = remote_path.rstrip("/").rsplit("/", 1)[0]
+                current = full[len(parent) + 1:] if full.startswith(parent + "/") else full
+        return size, current
+
     def _start_progress_monitor(
         self,
         transfer_id: str,
@@ -302,6 +369,10 @@ class ADBWrapper:
         """
         Start a daemon thread that polls size_fn() and updates _transfer_progress.
         Runs until transfer_id is removed from _transfer_progress.
+
+        size_fn may return either a byte count, or a tuple of
+        (byte_count, current_file) where current_file is the file being
+        copied right now (or None if unknown).
         """
         if total_size <= 0:
             return
@@ -316,7 +387,15 @@ class ADBWrapper:
             logger.info("MONITOR started [%s]: total_size=%d, interval=%.1fs", transfer_id, total_size, interval)
             while transfer_id in self._transfer_progress:
                 try:
-                    current = size_fn()
+                    result = size_fn()
+                    current_file = None
+                    if isinstance(result, tuple):
+                        current, current_file = result
+                    else:
+                        current = result
+                    if current_file is None:
+                        prev_info = self._transfer_progress.get(transfer_id) or {}
+                        current_file = prev_info.get("current_file")
                     if current is not None:
                         now = time.monotonic()
                         dt = now - prev_time
@@ -327,11 +406,16 @@ class ADBWrapper:
                             ema_speed = alpha * instant_speed + (1 - alpha) * ema_speed
                         prev_bytes = current
                         prev_time = now
+                        if transfer_id not in self._transfer_progress:
+                            # Transfer finished while we were polling — don't
+                            # re-create its entry (that would keep this thread alive).
+                            break
                         self._transfer_progress[transfer_id] = {
                             "progress": pct,
                             "bytes_transferred": current,
                             "speed_bps": max(0, int(ema_speed)),
                             "total_size": total_size,
+                            "current_file": current_file,
                         }
                         if pct - last_logged_pct >= 10:
                             last_logged_pct = pct
@@ -446,7 +530,8 @@ class ADBWrapper:
                 state=state,
                 model=props.get("model"),
                 product=props.get("product"),
-                transport_id=props.get("transport_id")
+                transport_id=props.get("transport_id"),
+                usb=props.get("usb"),
             ))
         
         return devices
@@ -636,7 +721,10 @@ class ADBWrapper:
 
         # Start file-size progress monitor for pulls
         if transfer_id:
-            self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
+            self._transfer_progress[transfer_id] = {
+                "progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0,
+                "current_file": os.path.basename(remote_path.rstrip("/")) or remote_path,
+            }
             # Determine remote size and whether it's a directory.
             # stat -c %s returns inode size for dirs (e.g. 4096), file size for files.
             # du -sb returns recursive total for dirs, same as stat for files.
@@ -655,7 +743,9 @@ class ADBWrapper:
             logger.debug("PULL [%s]: stat=%s, du=%s, is_dir=%s, dest=%s", transfer_id, stat_size, du_size, is_remote_dir, local_path)
             if remote_size and remote_size > 0:
                 if is_remote_dir:
-                    size_fn = lambda: self._get_local_total_size(local_path)
+                    # Total bytes so far + the most recently written file,
+                    # which is the one adb is copying right now.
+                    size_fn = lambda: self._scan_local_tree(local_path)
                 else:
                     # Use open+seek instead of os.path.getsize — on Windows,
                     # os.stat may return cached/stale size while adb is writing.
@@ -710,7 +800,10 @@ class ADBWrapper:
 
         # Start file-size progress monitor for pushes
         if transfer_id:
-            self._transfer_progress[transfer_id] = {"progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0}
+            self._transfer_progress[transfer_id] = {
+                "progress": 0, "bytes_transferred": 0, "speed_bps": 0, "total_size": 0,
+                "current_file": os.path.basename(os.path.normpath(local_path)),
+            }
             local_size = self._get_local_total_size(local_path)
             is_dir = os.path.isdir(local_path)
             logger.debug("PUSH [%s]: local_size=%s, is_dir=%s, dest=%s", transfer_id, local_size, is_dir, remote_path)
@@ -720,7 +813,7 @@ class ADBWrapper:
                     # Monitor that specific subfolder, NOT the whole parent dir
                     monitor_path = f"{remote_path.rstrip('/')}/{os.path.basename(local_path)}"
                     logger.debug("PUSH [%s]: monitoring remote subfolder %s", transfer_id, monitor_path)
-                    size_fn = lambda _mp=monitor_path: self._get_remote_dir_size_sync(device_id, _mp)
+                    size_fn = lambda _mp=monitor_path: self._get_remote_dir_progress_sync(device_id, _mp)
                 else:
                     # For single files: monitor destination file size via stat
                     size_fn = lambda: self._get_remote_file_size_sync(device_id, remote_path)
@@ -894,6 +987,8 @@ class ADBWrapper:
                             raise ADBError("Transfer cancelled")
 
                 filename = os.path.basename(remote_path)
+                if transfer_id and transfer_id in self._transfer_progress:
+                    self._transfer_progress[transfer_id]["current_file"] = remote_path
                 local_dest = os.path.join(local_dir, filename)
                 # Avoid overwriting if multiple remote files share the same name
                 if os.path.exists(local_dest):
@@ -929,6 +1024,7 @@ class ADBWrapper:
                         "total_size": 0,
                         "files_completed": done,
                         "files_total": total,
+                        "current_file": remote_path,
                     }
 
         finally:
@@ -1035,6 +1131,143 @@ class ADBWrapper:
         
         return storage_list
     
+    # Linux USB gadget speed names -> (label, nominal bits per second)
+    _USB_SPEEDS = {
+        "super-speed-plus": ("SuperSpeed+ · USB 3.2 Gen 2 · 10 Gbps", 10_000_000_000),
+        "super-speed": ("SuperSpeed · USB 3.2 Gen 1 · 5 Gbps", 5_000_000_000),
+        "high-speed": ("High-Speed · USB 2.0 · 480 Mbps", 480_000_000),
+        "full-speed": ("Full-Speed · USB 1.1 · 12 Mbps", 12_000_000),
+        "low-speed": ("Low-Speed · USB 1.0 · 1.5 Mbps", 1_500_000),
+    }
+
+    _BATTERY_STATUS = {
+        "1": "Unknown", "2": "Charging", "3": "Discharging",
+        "4": "Not charging", "5": "Full",
+    }
+
+    async def _get_adb_version(self) -> Optional[str]:
+        if getattr(self, "_adb_version", None) is None:
+            try:
+                stdout, _, code = await self._run_command("version", timeout=10)
+                m = re.search(r"Version\s+(\S+)", stdout) or re.search(r"version\s+(\S+)", stdout)
+                self._adb_version = m.group(1) if (code == 0 and m) else ""
+            except ADBError:
+                self._adb_version = ""
+        return self._adb_version or None
+
+    async def get_connection_info(self, device_id: str) -> ConnectionInfo:
+        """
+        Describe how the device is connected.
+
+        Everything comes from one `adb shell` call that reads:
+          - /sys/class/udc/*        the device's USB controller: negotiated
+                                    link speed, max speed, state
+          - getprop sys.usb.config  active USB functions (mtp, adb, ...)
+          - /sys/class/power_supply/usb  VBUS voltage/current (if readable)
+          - dumpsys battery         power source, level, temperature
+        Any of these can be hidden by SELinux on some devices; missing
+        values are simply returned as null.
+        """
+        is_wifi = ":" in device_id or "_adb-tls-connect" in device_id
+        script = (
+            'for d in /sys/class/udc/*; do '
+            '[ -e "$d/current_speed" ] && echo "udc=${d##*/}|$(cat "$d/current_speed" 2>/dev/null)'
+            '|$(cat "$d/maximum_speed" 2>/dev/null)|$(cat "$d/state" 2>/dev/null)"; '
+            'done; '
+            'echo "usb_config=$(getprop sys.usb.config)"; '
+            'echo "android=$(getprop ro.build.version.release)"; '
+            'echo "sdk=$(getprop ro.build.version.sdk)"; '
+            'echo "manufacturer=$(getprop ro.product.manufacturer)"; '
+            'echo "model=$(getprop ro.product.model)"; '
+            'echo "vbus_uv=$(cat /sys/class/power_supply/usb/voltage_now 2>/dev/null)"; '
+            'echo "vbus_ua=$(cat /sys/class/power_supply/usb/current_now 2>/dev/null)"; '
+            'dumpsys battery 2>/dev/null'
+        )
+        stdout, stderr, code = await self._run_command(
+            "shell", script, device_id=device_id, timeout=15
+        )
+        if code != 0 and not stdout.strip():
+            raise ADBError(f"Failed to read connection info: {stderr or stdout}")
+
+        kv: Dict[str, str] = {}
+        udcs: List[List[str]] = []
+        battery: Dict[str, str] = {}
+        for raw in stdout.splitlines():
+            line = raw.strip()
+            if line.startswith("udc="):
+                udcs.append(line[4:].split("|"))
+            elif "=" in line and not raw.startswith(" "):
+                k, v = line.split("=", 1)
+                kv[k] = v.strip()
+            elif ":" in line:
+                k, v = line.split(":", 1)
+                battery[k.strip().lower()] = v.strip()
+
+        # Prefer the controller that is actually configured (connected to a host)
+        udc = None
+        for u in udcs:
+            if len(u) >= 2 and u[1] and u[1].lower() not in ("unknown", ""):
+                udc = u
+                if len(u) >= 4 and u[3] == "configured":
+                    break
+        speed = udc[1].strip().lower() if udc else None
+        max_speed = udc[2].strip().lower() if udc and len(udc) > 2 and udc[2] else None
+
+        def to_int(v: Optional[str]) -> Optional[int]:
+            try:
+                return int(v) if v not in (None, "") else None
+            except ValueError:
+                return None
+
+        vbus_uv = to_int(kv.get("vbus_uv"))
+        vbus_ua = to_int(kv.get("vbus_ua"))
+
+        if battery.get("usb powered") == "true":
+            power = "USB"
+        elif battery.get("ac powered") == "true":
+            power = "AC"
+        elif battery.get("wireless powered") == "true":
+            power = "Wireless"
+        elif battery:
+            power = "Battery"
+        else:
+            power = None
+
+        temp = to_int(battery.get("temperature"))
+
+        # Find this device's USB path from `adb devices -l`
+        usb_path = None
+        try:
+            for d in await self.get_devices():
+                if d.id == device_id:
+                    usb_path = d.usb
+                    break
+        except ADBError:
+            pass
+
+        return ConnectionInfo(
+            transport="wifi" if is_wifi else "usb",
+            usb_path=usb_path,
+            usb_speed=None if is_wifi else speed,
+            usb_speed_label=None if is_wifi else (self._USB_SPEEDS.get(speed, (speed, None))[0] if speed else None),
+            usb_speed_bps=None if is_wifi else (self._USB_SPEEDS.get(speed, (None, None))[1] if speed else None),
+            usb_max_speed=max_speed,
+            usb_max_speed_label=self._USB_SPEEDS.get(max_speed, (max_speed, None))[0] if max_speed else None,
+            usb_controller=udc[0] if udc else None,
+            usb_functions=kv.get("usb_config") or None,
+            usb_voltage_mv=vbus_uv // 1000 if vbus_uv else None,
+            usb_current_ma=abs(vbus_ua) // 1000 if vbus_ua else None,
+            power_source=power,
+            battery_level=to_int(battery.get("level")),
+            battery_status=self._BATTERY_STATUS.get(battery.get("status", ""), None),
+            battery_temp_c=temp / 10 if temp is not None else None,
+            manufacturer=kv.get("manufacturer") or None,
+            model=kv.get("model") or None,
+            android_version=kv.get("android") or None,
+            sdk=to_int(kv.get("sdk")),
+            adb_version=await self._get_adb_version(),
+        )
+
     def _parse_size(self, size_str: str) -> int:
         """Parse human-readable size string to bytes."""
         size_str = size_str.upper().strip()

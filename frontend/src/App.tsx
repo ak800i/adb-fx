@@ -8,21 +8,11 @@ import { FileList } from './components/FileList';
 import { InputModal, ConfirmModal } from './components/Modal';
 import { Toast, ToastMessage } from './components/Toast';
 import { TransferQueue, TransferItem } from './components/TransferQueue';
+import { ConnectionPanel } from './components/ConnectionPanel';
 import { fileApi, deviceApi, localApi } from './services/api';
+import { formatBytes } from './utils/formatBytes';
 import type { FileEntry, DeviceStorageInfo } from './types';
 import styles from './App.module.css';
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let size = bytes;
-  let i = 0;
-  while (size >= 1024 && i < units.length - 1) {
-    size /= 1024;
-    i++;
-  }
-  return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
-}
 
 function App() {
   const {
@@ -169,7 +159,16 @@ function App() {
           setTransfers((prev) =>
             prev.map((t) =>
               t.id === itemId && t.status === 'active'
-                ? { ...t, progress: info.progress, speedBps: info.speedBps, filesCompleted: info.filesCompleted, filesTotal: info.filesTotal }
+                ? {
+                    ...t,
+                    progress: info.progress,
+                    speedBps: info.speedBps,
+                    filesCompleted: info.filesCompleted,
+                    filesTotal: info.filesTotal,
+                    currentFile: info.currentFile ?? t.currentFile,
+                    bytesTransferred: info.bytesTransferred,
+                    totalSize: info.totalSize,
+                  }
                 : t
             )
           );
@@ -442,6 +441,14 @@ function App() {
             onRefresh={refreshDevices}
             loading={devicesLoading}
           />
+          {selectedDevice?.state === 'device' && (
+            <ConnectionPanel
+              deviceId={selectedDevice.id}
+              transferSpeedBps={transfers
+                .filter((t) => t.status === 'active')
+                .reduce((sum, t) => sum + t.speedBps, 0)}
+            />
+          )}
           <WirelessConnect
             usbDevices={devices.filter((d) => d.state === 'device' && !d.id.includes(':'))}
             onConnected={refreshDevices}

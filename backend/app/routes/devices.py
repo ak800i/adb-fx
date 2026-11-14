@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 from ..adb import adb, ADBError
 from ..models import (
-    Device, DeviceStorageInfo, OperationResult,
+    Device, DeviceStorageInfo, OperationResult, ConnectionInfo,
     WirelessConnectRequest, WirelessPairRequest, TcpIpRequest,
 )
 
@@ -28,6 +28,15 @@ async def get_device_storage(device_id: str):
     try:
         storage = await adb.get_storage_info(device_id)
         return storage
+    except ADBError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{device_id}/connection", response_model=ConnectionInfo)
+async def get_device_connection(device_id: str):
+    """Get USB link speed, USB functions, power and version info for a device."""
+    try:
+        return await adb.get_connection_info(device_id)
     except ADBError as e:
         raise HTTPException(status_code=500, detail=str(e))
 

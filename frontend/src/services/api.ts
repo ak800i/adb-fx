@@ -7,6 +7,7 @@ import type {
   FileListResponse, 
   OperationResult,
   DeviceStorageInfo,
+  ConnectionInfo,
   LocalListResponse,
 } from '../types';
 
@@ -51,6 +52,14 @@ export const deviceApi = {
   async getStorageInfo(deviceId: string): Promise<DeviceStorageInfo[]> {
     const response = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/storage`);
     return handleResponse<DeviceStorageInfo[]>(response);
+  },
+
+  /**
+   * Get USB link speed, USB functions, power and version info for a device
+   */
+  async getConnectionInfo(deviceId: string): Promise<ConnectionInfo> {
+    const response = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/connection`);
+    return handleResponse<ConnectionInfo>(response);
   },
 
   /**
@@ -172,6 +181,9 @@ export const fileApi = {
     speedBps: number;
     filesCompleted?: number;
     filesTotal?: number;
+    currentFile?: string;
+    bytesTransferred?: number;
+    totalSize?: number;
   } | null> {
     const params = new URLSearchParams({ transfer_id: transferId });
     const response = await fetch(
@@ -184,6 +196,9 @@ export const fileApi = {
       speedBps: data.speed_bps ?? 0,
       filesCompleted: data.files_completed ?? undefined,
       filesTotal: data.files_total ?? undefined,
+      currentFile: data.current_file ?? undefined,
+      bytesTransferred: data.bytes_transferred ?? undefined,
+      totalSize: data.total_size ?? undefined,
     };
   },
 

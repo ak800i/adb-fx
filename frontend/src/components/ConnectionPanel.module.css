@@ -1,0 +1,159 @@
+.container {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.header:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.iconBtn {
+  margin-left: auto;
+  display: flex;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chevron {
+  transition: transform 0.2s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.speedBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.speed {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.speedSlow {
+  color: var(--warning);
+}
+
+.warning {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--warning);
+  background: rgba(243, 156, 18, 0.1);
+}
+
+.warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usageRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.meter {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.value {
+  margin: 0;
+  font-size: 12px;
+  text-align: right;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.error {
+  font-size: 11px;
+  color: var(--danger);
+}

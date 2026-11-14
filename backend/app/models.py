@@ -29,6 +29,7 @@ class Device(BaseModel):
     state: DeviceState = Field(..., description="Device connection state")
     product: Optional[str] = Field(None, description="Product name")
     transport_id: Optional[str] = Field(None, description="Transport ID")
+    usb: Optional[str] = Field(None, description="USB bus path reported by 'adb devices -l' (e.g. 1-4)")
 
 
 class FileEntry(BaseModel):
@@ -123,3 +124,27 @@ class TcpIpRequest(BaseModel):
     """Request to switch a USB device to TCP/IP mode."""
     device_id: str = Field(..., description="Serial of the USB-connected device")
     port: int = Field(5555, description="TCP port to listen on")
+
+
+class ConnectionInfo(BaseModel):
+    """How a device is connected: transport, USB link, power and versions."""
+    transport: str = Field(..., description="'usb' or 'wifi'")
+    usb_path: Optional[str] = Field(None, description="USB bus path on the host, if reported")
+    usb_speed: Optional[str] = Field(None, description="Raw negotiated link speed, e.g. 'super-speed-plus'")
+    usb_speed_label: Optional[str] = Field(None, description="Human-readable link speed")
+    usb_speed_bps: Optional[int] = Field(None, description="Nominal link speed in bits per second")
+    usb_max_speed: Optional[str] = Field(None, description="Fastest speed the device's USB controller supports")
+    usb_max_speed_label: Optional[str] = None
+    usb_controller: Optional[str] = Field(None, description="Device-side USB controller (UDC) name")
+    usb_functions: Optional[str] = Field(None, description="Active USB functions, e.g. 'mtp,adb'")
+    usb_voltage_mv: Optional[int] = Field(None, description="VBUS voltage in millivolts, if readable")
+    usb_current_ma: Optional[int] = Field(None, description="USB input current in milliamps, if readable")
+    power_source: Optional[str] = Field(None, description="'USB', 'AC', 'Wireless' or 'Battery'")
+    battery_level: Optional[int] = None
+    battery_status: Optional[str] = None
+    battery_temp_c: Optional[float] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    android_version: Optional[str] = None
+    sdk: Optional[int] = None
+    adb_version: Optional[str] = Field(None, description="Host ADB version")

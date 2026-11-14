@@ -117,6 +117,7 @@ async def get_progress(
         "total_size": info.get("total_size", 0),
         "files_completed": info.get("files_completed"),
         "files_total": info.get("files_total"),
+        "current_file": info.get("current_file"),
     }
 
 

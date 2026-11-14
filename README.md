@@ -44,6 +44,8 @@ The only prerequisites are:
 - **Serial transfer queue**: Transfers are processed one at a time. If additional files or folders are added while a transfer is in progress, they are queued (shown as "Queued" in the transfer panel) and executed sequentially — never in parallel. This prevents ADB contention and ensures predictable behaviour.
 - **Transfer progress bar**: Real-time progress tracked by monitoring destination file size growth during transfers (ADB suppresses progress output in non-TTY pipes). Polled every 500ms for pulls, 1s for pushes. Progress endpoint also returns transfer speed (bytes/sec), not just percentage
 - **Transfer speed**: Displayed in the transfer queue as an exponentially-weighted moving average (smoothed), updated on each progress poll. Speed is computed on the backend from byte-count deltas between poll intervals.
+- **Current file display**: The transfer queue shows which file is being copied right now, including inside a folder upload/download or a bulk download, plus bytes copied of the total. For folders, the in-flight file is the most recently modified file in the destination tree (adb writes one file at a time).
+- **Connection panel**: A sidebar card showing how the selected device is connected — negotiated USB link speed (e.g. SuperSpeed+ 10 Gbps vs High-Speed 480 Mbps), the device's maximum supported speed, active USB functions (`mtp,adb`), USB controller, VBUS voltage/current, battery level/status/temperature, Android version and host ADB version. While a transfer runs it also shows how much of the USB link bandwidth is being used, and warns when the link is slower than the device supports (usually a USB 2.0 cable or port). Values come from `/sys/class/udc`, `getprop` and `dumpsys battery` in one `adb shell` call; anything the device's SELinux policy hides is just left out.
 - **URL hash persistence**: Current path stored in `#/storage/...` — survives page refresh, supports back/forward. Path segments are properly percent-encoded so folders with spaces or special characters (e.g. `F1 (2025)`) work correctly.
 
 ## Design
@@ -111,6 +113,7 @@ adb-fx/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/devices` | List connected devices |
+| GET | `/api/devices/{id}/connection` | USB link speed, USB functions, power, battery and version info |
 | GET | `/api/devices/{id}/files` | List files in directory (paginated: `offset`, `limit`) |
 | POST | `/api/devices/{id}/files/push` | Push local file/folder to device |
 | POST | `/api/devices/{id}/files/pull` | Pull device file to local directory |
@@ -118,7 +121,7 @@ adb-fx/
 | DELETE | `/api/devices/{id}/files` | Delete file or folder |
 | POST | `/api/devices/{id}/files/rename` | Rename/move file or folder |
 | POST | `/api/devices/{id}/files/cancel` | Cancel an in-progress transfer |
-| GET | `/api/devices/{id}/files/progress` | Get transfer progress (0-100%), speed (bytes/s) |
+| GET | `/api/devices/{id}/files/progress` | Get transfer progress (0-100%), speed (bytes/s), bytes copied, current file |
 | GET | `/api/local/drives` | List Windows drive letters |
 | GET | `/api/local/list` | Browse local directory contents |
 | GET | `/api/local/pick-folder` | Open native OS folder picker dialog |
